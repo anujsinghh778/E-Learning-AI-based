@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: nirmal-masala-bhandar
+    env: node
+    plan: starter # Render requires a paid plan (starts at $7/mo) to mount persistent disks
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /data/data.db
+    disk:
+      name: nmb-sqlite-db
+      mountPath: /data
+      sizeGB: 1

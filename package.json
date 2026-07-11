@@ -1,0 +1,23 @@
+{
+  "name": "nirmal-masala-bhandar",
+  "version": "1.0.0",
+  "description": "Nirmal Masala Bhandar - Heritage Spice & Tea Shop in Jodhpur (Full-Stack)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.1"
+  },
+  "keywords": [
+    "spice-shop",
+    "express",
+    "sqlite",
+    "full-stack",
+    "jodhpur"
+  ],
+  "author": "Nirmal Masala Bhandar",
+  "license": "ISC"
+}
