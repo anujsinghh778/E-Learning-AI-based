@@ -1,10 +1,11 @@
 # Nirmal Masala Bhandar - Heritage Spice & Tea Shop (Jodhpur)
+https://nirmal-masala-bhandar-webapp.onrender.com
 
 A premium, full-stack, single-page e-commerce storefront for a heritage spice shop based in the old city bazaar of Jodhpur, Rajasthan. 
 
 This project bridges traditional local spice-trading craft with modern, quick-commerce capabilities, featuring dynamic category loading, persistent shopping cart, checkout processing, local review submission, and database storage.
 
-## Features
+ Features
 
 1. **Rich Heritage Aesthetics**:
    - Designed around Jodhpur bazaar visual themes, featuring a warm ink-brown palette (`#140d09`), glowing gold (`#dfad3c`) and copper (`#b86927`) accent tones, and parchment text readability.
@@ -33,7 +34,6 @@ This project bridges traditional local spice-trading craft with modern, quick-co
 ## Folder Structure
 
 ```
-antigravity/
 ├── public/                 # Static frontend assets
 │   ├── index.html          # Semantic HTML5 layout
 │   ├── styles.css          # Design system stylesheet
@@ -46,30 +46,7 @@ antigravity/
 
 ---
 
-## Setup & Running Locally
 
-### Prerequisites
-
-- **Node.js**: Version **22.5.0** or higher is required since the project utilizes the built-in experimental `node:sqlite` module.
-
-### Installation
-
-1. Open a terminal inside the project directory:
-   ```bash
-   npm install
-   ```
-
-2. Start the local server:
-   ```bash
-   npm start
-   ```
-
-3. Open your browser and navigate to:
-   [http://localhost:3000](http://localhost:3000)
-
-*Note: For development, you can use `npm run dev` to watch code changes.*
-
----
 
 ## REST API Reference
 
