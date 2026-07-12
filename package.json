@@ -19,5 +19,8 @@
     "jodhpur"
   ],
   "author": "Nirmal Masala Bhandar",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "node": ">=22.5.0"
+  }
 }
