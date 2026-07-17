@@ -3,812 +3,289 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nirmal Masala Bhandar - Heritage Spices Jodhpur</title>
-  <!-- SEO Meta Tags -->
-  <meta name="description" content="Nirmal Masala Bhandar - Serving Jodhpur for 50+ years with stone-ground, pure, preservative-free whole spices, garam masalas, signature chais, dry fruits, and cow ghee.">
-  <meta name="keywords" content="Spices, Masala, Jodhpur, Indian spices, Chai, Mathania Mirch, Desi Ghee, Pure Spices, Nirmal Masala">
-  <!-- Fonts -->
+  <title>CRDT Sequence RGA Collaborative Telemetry</title>
+  <!-- Google Fonts for premium typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=IBM+Plex+Mono:ital,wght@0,100..700;1,100..700&family=Work+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-  <!-- CSS -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <!-- Header & Navigation -->
-  <header class="navbar" id="main-nav">
-    <div class="nav-container">
-      <a href="#" class="logo-brand">
-        <span class="logo-icon">⚖️</span>
-        <div class="logo-text">
-          <span class="brand-title">Nirmal Masala Bhandar</span>
-          <span class="brand-subtitle">Estd. 1972 · Jodhpur</span>
+  <div class="dashboard">
+    
+    <!-- Premium Header -->
+    <header class="app-header">
+      <div class="header-main">
+        <div class="logo-group">
+          <!-- Server icon SVG -->
+          <svg class="icon-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+          <div>
+            <h1>RGA-CRDT Observability Dashboard</h1>
+            <p class="subtitle">Distributed Systems Experiment: Sequence Conflict-Free Replicated Data Type (RGA)</p>
+          </div>
         </div>
-      </a>
-      
-      <nav class="nav-links">
-        <a href="#shop-section" class="nav-link">Bazaar</a>
-        <a href="#about-section" class="nav-link">Our Heritage</a>
-        <a href="#tracker-section" class="nav-link">Track Order</a>
-        <a href="#reviews-section" class="nav-link">Testimonials</a>
-        <a href="#contact-section" class="nav-link">Visit Us</a>
-      </nav>
+        
+        <div class="system-status">
+          <span class="status-label">Global State:</span>
+          <div id="convergence-badge" class="badge badge-converged">
+            <span class="badge-dot"></span>
+            <span class="badge-text">✓ CONVERGED</span>
+          </div>
+        </div>
+      </div>
+    </header>
 
-      <div class="nav-actions">
-        <a href="https://github.com/anujsinghh778/nirmal-masala-bhandar-webapp-" target="_blank" rel="noopener" class="github-btn" aria-label="View source code on GitHub">
-          <span class="github-icon">🐙</span>
-          <span class="github-text">GitHub</span>
-        </a>
-        <button class="cart-btn" id="open-cart-btn" aria-label="Open shopping cart">
-          <span class="cart-icon">🛒</span>
-          <span class="cart-text">Cart</span>
-          <span class="cart-badge" id="cart-count">0</span>
+    <!-- Visual Interactive Explainer & Walkthrough -->
+    <section class="walkthrough-section">
+      <header class="section-title-wrapper">
+        <svg class="icon-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        <h3>How to Test & Observe the Merge Mechanics</h3>
+      </header>
+      <div class="walkthrough-steps">
+        <div class="step-card">
+          <div class="step-num">01</div>
+          <h4>Simulate Real-time Sync</h4>
+          <p>Type characters concurrently in **Alice** and **Bob** panes. Notice how keys sync instantly, and caret positions follow character IDs rather than numeric indexes.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">02</div>
+          <h4>Offline Concurrent Edits</h4>
+          <p>Toggle **Charlie** to <span class="pill-inline offline">OFFLINE</span>. Type `CharlieText` inside Charlie's editor. Concurrently type `OnlineText` in Alice. Replicas are now diverged.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">03</div>
+          <h4>Reconnect & Auto-Merge</h4>
+          <p>Toggle Charlie back to <span class="pill-inline online">ONLINE</span>. Charlie will show <span class="pill-inline syncing">SYNCING...</span> while catching up. The RGA merges concurrent histories with deterministic tie-breaking.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- System Controls -->
+    <section class="control-panel">
+      <div class="control-left">
+        <!-- Latency Slider -->
+        <div class="slider-group">
+          <div class="slider-label-row">
+            <span>Simulated Network Latency</span>
+            <span id="latency-val" class="slider-val">300ms</span>
+          </div>
+          <input type="range" id="latency-slider" min="0" max="1500" value="300" step="50" class="premium-slider">
+          <div class="slider-ticks">
+            <span>0ms (LAN)</span>
+            <span>750ms</span>
+            <span>1500ms (Satellite)</span>
+          </div>
+        </div>
+
+        <!-- Tombstones Toggle -->
+        <div class="toggle-group">
+          <span class="toggle-label">Pedagogical Debug:</span>
+          <label class="switch-container">
+            <input type="checkbox" id="tombstone-toggle">
+            <span class="switch-slider"></span>
+          </label>
+          <span class="toggle-desc">Show Deleted Tombstones <span class="badge-new">RGA Core</span></span>
+        </div>
+      </div>
+
+      <div class="control-right">
+        <button id="run-tests-btn" class="action-btn secondary-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Run Diagnostics
+        </button>
+        <button id="reset-btn" class="action-btn danger-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+          Reset Workspace
         </button>
       </div>
-    </div>
-  </header>
+    </section>
 
-  <!-- Hero Section -->
-  <section class="hero-section" style="background-image: linear-gradient(rgba(20, 13, 9, 0.85), rgba(20, 13, 9, 0.95)), url('/images/hero_bazaar.png'); background-size: cover; background-position: center;">
-    <div class="hero-container">
-      <div class="hero-content">
-        <span class="heritage-tag">Three Generations of Purity</span>
-        <h1 class="hero-title">Pure Spices, Hand-Weighed in Jodhpur</h1>
-        <p class="hero-description">
-          Since 1972, we have sourced the finest whole spices and stone-ground our masalas in small batches at our Kotwali Road bazaar. No preservatives, no artificial colors—only the rich, authentic flavor of Marwar.
-        </p>
-        <div class="hero-buttons">
-          <a href="#shop-section" class="btn btn-primary">Explore the Bazaar</a>
-          <a href="#tracker-section" class="btn btn-secondary">Track Live Dispatch</a>
+    <!-- Diagnostic Log Panel (Collapsible) -->
+    <div id="diagnostic-pane" class="diagnostic-panel hidden">
+      <div class="diag-header">
+        <div class="diag-title">
+          <span class="diag-indicator"></span>
+          <h3>CRDT ALGORITHMIC TEST VERIFICATION REPORT</h3>
         </div>
+        <button id="close-diag-btn" class="close-btn">&times;</button>
       </div>
+      <div id="test-results-log" class="test-results-log font-mono"></div>
+    </div>
+
+    <!-- Triple Workspace Cards -->
+    <main class="replica-grid">
       
-      <div class="hero-illustration">
-        <!-- SVG Heritage Brass Scale -->
-        <svg viewBox="0 0 400 400" width="100%" height="100%" class="brass-scale-svg" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="brass-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#f3d078" />
-              <stop offset="50%" stop-color="#c59b27" />
-              <stop offset="100%" stop-color="#80600d" />
-            </linearGradient>
-            <linearGradient id="copper-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#e5a93b" />
-              <stop offset="100%" stop-color="#8c4f0d" />
-            </linearGradient>
-            <radialGradient id="shadow-grad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="rgba(0,0,0,0.6)" />
-              <stop offset="100%" stop-color="rgba(0,0,0,0)" />
-            </radialGradient>
-          </defs>
-          
-          <!-- Ground Shadow -->
-          <ellipse cx="200" cy="360" rx="140" ry="15" fill="url(#shadow-grad)" />
-          
-          <!-- Base Stand -->
-          <path d="M 160 350 L 240 350 L 220 330 L 180 330 Z" fill="url(#brass-grad)" stroke="#523e08" stroke-width="1.5" />
-          <rect x="190" y="120" width="20" height="210" rx="3" fill="url(#brass-grad)" stroke="#523e08" stroke-width="1.5" />
-          
-          <!-- Scale Accent / Center Pointer -->
-          <polygon points="200,80 195,120 205,120" fill="url(#copper-grad)" stroke="#523e08" stroke-width="1" />
-          <circle cx="200" cy="110" r="8" fill="url(#brass-grad)" stroke="#523e08" stroke-width="1.5" />
-          
-          <!-- Main Beam (Crossbar) -->
-          <rect x="70" y="105" width="260" height="10" rx="2" fill="url(#brass-grad)" stroke="#523e08" stroke-width="1.5" transform="rotate(2 200 110)" />
-          <circle cx="75" cy="107" r="4" fill="url(#copper-grad)" />
-          <circle cx="325" cy="112" r="4" fill="url(#copper-grad)" />
-          
-          <!-- Left Pan Chains -->
-          <line x1="75" y1="108" x2="45" y2="240" stroke="#8c5a1a" stroke-width="1.5" />
-          <line x1="75" y1="108" x2="105" y2="240" stroke="#8c5a1a" stroke-width="1.5" />
-          <line x1="75" y1="108" x2="75" y2="240" stroke="#8c5a1a" stroke-width="1" stroke-dasharray="2,2" />
-          
-          <!-- Right Pan Chains -->
-          <line x1="324" y1="113" x2="294" y2="245" stroke="#8c5a1a" stroke-width="1.5" />
-          <line x1="324" y1="113" x2="354" y2="245" stroke="#8c5a1a" stroke-width="1.5" />
-          <line x1="324" y1="113" x2="324" y2="245" stroke="#8c5a1a" stroke-width="1" stroke-dasharray="2,2" />
-          
-          <!-- Left Pan -->
-          <path d="M 35 240 Q 75 270 115 240 Z" fill="url(#brass-grad)" stroke="#523e08" stroke-width="1.5" />
-          <!-- Spices in Left Pan -->
-          <path d="M 45 240 Q 75 190 105 240 Z" fill="#b92f2f" opacity="0.9" />
-          
-          <!-- Right Pan -->
-          <path d="M 284 245 Q 324 275 364 245 Z" fill="url(#brass-grad)" stroke="#523e08" stroke-width="1.5" />
-          <!-- Spices in Right Pan -->
-          <path d="M 294 245 Q 324 200 354 245 Z" fill="#dfad1a" opacity="0.9" />
-          
-          <!-- Ornamental Flourishes -->
-          <circle cx="200" cy="80" r="4" fill="url(#brass-grad)" />
-        </svg>
-      </div>
-    </div>
-  </section>
-
-  <!-- Trust Stats Bar -->
-  <section class="trust-stats">
-    <div class="stats-container">
-      <div class="stat-item">
-        <span class="stat-num">50+</span>
-        <span class="stat-lbl">Years of Purity</span>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <span class="stat-num">4.9★</span>
-        <span class="stat-lbl">Google Business Rating</span>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <span class="stat-num">15-20m</span>
-        <span class="stat-lbl">Jodhpur Quick Delivery</span>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <span class="stat-num">100%</span>
-        <span class="stat-lbl">Zero Preservatives</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- Shop / Bazaar Section -->
-  <section class="shop-section" id="shop-section">
-    <div class="section-header">
-      <span class="section-pre">Direct from Jodhpur Bazaar</span>
-      <h2 class="section-title">Weighed By Hand, Ground With Care</h2>
-      <p class="section-desc">Search, filter, and choose specific quantities (e.g. 15 packs). Select a card to view detailed spice origin and benefits.</p>
-    </div>
-
-    <!-- Advanced Filter & Search controls -->
-    <div class="filter-controls-card">
-      <div class="search-box-container">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="product-search" placeholder="Search for cumin, Mathania, tea blends, ghee...">
-      </div>
-      
-      <div class="filters-grid">
-        <div class="filter-dropdown-group">
-          <label for="sort-select">Sort By</label>
-          <select id="sort-select">
-            <option value="id-asc">Default Bazaar Order</option>
-            <option value="price-asc">Price: Low to High</option>
-            <option value="price-desc">Price: High to Low</option>
-            <option value="name-asc">Alphabetical</option>
-          </select>
-        </div>
-
-        <div class="filter-price-inputs">
-          <label>Price Range (₹)</label>
-          <div class="price-range-fields">
-            <input type="number" id="price-min" placeholder="Min" min="0">
-            <span>to</span>
-            <input type="number" id="price-max" placeholder="Max" min="0">
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Category Filter Chips -->
-    <div class="category-filters-container">
-      <div class="category-filters" id="category-chips">
-        <button class="filter-chip active" data-id="all">All Selections</button>
-      </div>
-    </div>
-
-    <!-- Products Grid -->
-    <div class="products-grid-container">
-      <div class="products-grid" id="products-grid">
-        <div class="loading-spinner">Loading products from the bazaar...</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- UPGRADE: Marwar Culinary Masterclass & Interactive Recipe Pairing Tool -->
-  <section class="recipe-pairing-section" id="recipe-section">
-    <div class="recipe-container">
-      <div class="section-header">
-        <span class="section-pre">Marwar Culinary Masterclass</span>
-        <h2 class="section-title">Unlock Heritage Marwari Flavors</h2>
-        <p class="section-desc">Select a spice from our Kotwali road bhandar to unlock a traditional family recipe, complete with prep times, secret steps, and single-click spice bag refills.</p>
-      </div>
-
-      <div class="recipe-split-grid">
-        <div class="recipe-selector-card">
-          <h4>Culinary Pairing Assistant</h4>
-          <p>Choose a signature spice to view its traditional kitchen pairings and authentic Jodhpuri recipes:</p>
-          
-          <div class="form-group">
-            <label for="recipe-spice-select">Select Heritage Spice</label>
-            <select id="recipe-spice-select" class="recipe-dropdown">
-              <option value="mathania-mirch">🌶️ Jodhpuri Mathania Lal Mirch</option>
-              <option value="kesar-elaichi">🥛 Kesar Elaichi Chai / Saffron</option>
-              <option value="shahi-garam-masala">🍲 Shahi Garam Masala (18 Spices)</option>
-              <option value="green-cardamom">🟢 Munnar Green Cardamom</option>
-              <option value="cow-ghee">🏺 Pure Desi A2 Cow Ghee</option>
-            </select>
-          </div>
-
-          <div class="pairing-suggestions">
-            <h5>Ideal Cooking Pairings:</h5>
-            <div id="recipe-pairing-badges" class="pairing-badges-list">
-              <!-- Dynamically rendered suggestions -->
-            </div>
-          </div>
-        </div>
-
-        <div class="recipe-display-card" id="recipe-card-display">
-          <!-- Dynamically updated recipe content -->
-          <div class="recipe-card-header">
-            <span class="recipe-tag-badge">🌶️ Hot & Smoky</span>
-            <h3 class="recipe-title">Authentic Rajasthani Laal Maas</h3>
-            <div class="meta-flex">
-              <span>⏱️ Prep: 20 mins</span>
-              <span>🔥 Cook: 45 mins</span>
-              <span>👨‍👩‍👧‍👦 Serves: 4</span>
-            </div>
-          </div>
-          
-          <div class="recipe-section-block">
-            <h5>Culinary Secret:</h5>
-            <p class="recipe-secret-text">Soak the Mathania chilis in warm water for 15 minutes before grinding into a paste to unlock the royal crimson color without burning heat.</p>
-          </div>
-
-          <div class="recipe-section-block">
-            <h5>Ingredients Needed:</h5>
-            <ul class="recipe-ingredients-list">
-              <li>500g Lamb or Goat shoulder pieces</li>
-              <li>4 tbsp <strong>Pure Desi Cow Ghee</strong></li>
-              <li>3 tbsp <strong>Jodhpuri Mathania Lal Mirch</strong> (pasted)</li>
-              <li>2 tsp <strong>Shahi Garam Masala</strong></li>
-              <li>Whole cardamoms, cloves, bay leaves</li>
-            </ul>
-          </div>
-
-          <div class="recipe-action-footer">
-            <button class="btn btn-primary" id="add-recipe-spices-btn">🛒 Add Required Spices to Bag</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Product Details Modal Sheet (Dynamic Lightbox) -->
-  <div class="modal-overlay" id="product-detail-modal">
-    <div class="modal-card detail-modal-card">
-      <div class="modal-header">
-        <h3 id="modal-product-category">Whole Spices</h3>
-        <button class="close-modal-btn" id="close-detail-btn">&times;</button>
-      </div>
-      <div class="modal-body detail-modal-body">
-        <div class="detail-split-layout">
-          <div class="detail-image-column" id="modal-product-image-container">
-            <!-- image background -->
-          </div>
-          <div class="detail-info-column">
-            <span class="detail-origin-tag" id="modal-product-origin">Sourced from Salem, Tamil Nadu</span>
-            <h2 class="detail-title" id="modal-product-name">Jodhpuri Mathania Mirch</h2>
-            
-            <div class="detail-price-box">
-              <span class="detail-price-val" id="modal-product-price">₹180.00</span>
-              <span class="detail-price-lbl" id="modal-product-unit">per 200g</span>
-            </div>
-
-            <div class="detail-content-section">
-              <h5>Product Description</h5>
-              <p id="modal-product-desc">Freshly ground mathania red chili...</p>
-            </div>
-
-            <div class="detail-content-section">
-              <h5>Health Benefits</h5>
-              <p id="modal-product-benefits" class="highlight-benefit">💡 Rich in Vitamin C, digests easily.</p>
-            </div>
-
-            <div class="detail-content-section">
-              <h5>Our Heritage Story</h5>
-              <p id="modal-product-story">Our grandfather Shri Nirmal Chand...</p>
-            </div>
-
-            <div class="detail-purchase-row">
-              <div class="detail-qty-container">
-                <label for="detail-qty-input">Quantity:</label>
-                <div class="qty-control text-qty-control">
-                  <button class="qty-btn" id="detail-qty-minus">-</button>
-                  <input type="number" id="detail-qty-input" value="1" min="1" max="100">
-                  <button class="qty-btn" id="detail-qty-plus">+</button>
-                </div>
-              </div>
-              <button class="btn btn-primary" id="modal-add-to-cart-btn">Add to Spice Bag</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- About / Heritage Section -->
-  <section class="about-section" id="about-section">
-    <div class="about-container">
-      <div class="about-image-column">
-        <div class="about-image-card">
-          <div class="story-graphic">
-            <span class="story-icon">🌶️</span>
-            <h4>Original Family Recipes</h4>
-            <p>Our garam masalas and tea blends are ground using stone-wheels (Chakki) which spin slowly, keeping temperatures low to protect delicate essential oils.</p>
-          </div>
-          <div class="story-stamp">
-            <span>SINCE 1972</span>
-          </div>
-        </div>
-      </div>
-      
-      <div class="about-content-column">
-        <span class="section-pre">Our Heritage</span>
-        <h2 class="section-title">The Legend of Nirmal Chand's Brass Scale</h2>
-        <p>
-          In the autumn of 1972, Shri Nirmal Chand opened a tiny spice corner in the heart of old Jodhpur. Armed with only a manual brass scale and a commitment to never adulterate his goods, he won the trust of local families one ounce at a time.
-        </p>
-        <p>
-          Unlike modern high-speed industrial factories that burn away spice oils, we grind our spices slowly. We still weigh and pack every order by hand, ensuring that when the package is opened in your kitchen, the aroma takes you straight to the spice markets of Marwar.
-        </p>
-        <div class="about-features">
-          <div class="about-feat-item">
-            <span class="feat-icon">🌾</span>
+      <!-- Replica A: Alice -->
+      <article class="replica-card site-A" data-site="A">
+        <header class="card-header">
+          <div class="user-profile">
+            <div class="avatar bg-A">A</div>
             <div>
-              <h5>Sourced Direct</h5>
-              <p>Chilis from Mathania, Turmeric from Salem, Cardamom from Munnar.</p>
+              <h3>Alice</h3>
+              <span class="site-label">Local Replica ID: A</span>
             </div>
           </div>
-          <div class="about-feat-item">
-            <span class="feat-icon">🪵</span>
+          <button id="toggle-A" class="status-pill online">ONLINE</button>
+        </header>
+
+        <!-- Network connection visual ribbon -->
+        <div class="connection-status-ribbon online" id="ribbon-A">
+          <svg class="icon-conn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+          <span class="conn-text">Active connection to global log</span>
+        </div>
+
+        <div class="presence-bar">
+          <span class="presence-hdr">Presence List:</span>
+          <div class="presence-chips">
+            <span class="pres-chip" id="presence-A-B">
+              <span class="status-dot bg-B"></span> Bob: <span class="status-text">ONLINE</span>
+            </span>
+            <span class="pres-chip" id="presence-A-C">
+              <span class="status-dot bg-C"></span> Charlie: <span class="status-text">ONLINE</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="editor-wrapper">
+          <!-- The Editable Container -->
+          <div id="editor-A" class="editor-pane" tabindex="0" data-site="A"></div>
+          <div class="focus-indicator"></div>
+        </div>
+
+        <footer class="card-footer">
+          <div class="footer-metric">
+            <span class="metric-lbl">VISIBLE LENGTH</span>
+            <span id="char-count-A" class="metric-val">0</span>
+          </div>
+          <div class="footer-metric">
+            <span class="metric-lbl">DATABASE OPS SEEN</span>
+            <span id="ops-seen-A" class="metric-val font-mono">0</span>
+          </div>
+        </footer>
+      </article>
+
+      <!-- Replica B: Bob -->
+      <article class="replica-card site-B" data-site="B">
+        <header class="card-header">
+          <div class="user-profile">
+            <div class="avatar bg-B">B</div>
             <div>
-              <h5>Stone Ground</h5>
-              <p>Slow ground at cool temperatures to protect the volatile spice oils.</p>
+              <h3>Bob</h3>
+              <span class="site-label">Local Replica ID: B</span>
             </div>
           </div>
+          <button id="toggle-B" class="status-pill online">ONLINE</button>
+        </header>
+
+        <!-- Network connection visual ribbon -->
+        <div class="connection-status-ribbon online" id="ribbon-B">
+          <svg class="icon-conn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+          <span class="conn-text">Active connection to global log</span>
         </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- Live Order Dispatch Tracker -->
-  <section class="tracker-section" id="tracker-section">
-    <div class="tracker-container">
-      <div class="section-header">
-        <span class="section-pre">Live Dispatch Network</span>
-        <h2 class="section-title">Track Your Hand-Weighed Orders</h2>
-        <p class="section-desc">Enter your order number (e.g. NMB-2026-1234) below to view your order status, dispatch checkpoints, and estimated delivery timeline.</p>
-      </div>
-
-      <div class="tracker-input-card">
-        <form id="order-tracking-form">
-          <div class="track-form-row">
-            <input type="text" id="track-order-number" required placeholder="Enter Order Number (NMB-2026-XXXX)">
-            <button type="submit" class="btn btn-primary">Locate Dispatch</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Tracking Results Timeline Widget -->
-      <div class="tracking-results-card hidden" id="tracking-results-card">
-        <div class="tracking-results-header">
-          <div>
-            <h4>Order Reference: <span id="track-disp-number" class="text-glow">NMB-2026-5839</span></h4>
-            <p>Customer: <span id="track-disp-customer">Ramesh Kumar</span></p>
-          </div>
-          <div class="text-right">
-            <h4>Total Price: <span id="track-disp-total" class="text-gold">₹420.00</span></h4>
-            <p>Status: <span id="track-disp-status-badge" class="status-badge">Pending</span></p>
+        <div class="presence-bar">
+          <span class="presence-hdr">Presence List:</span>
+          <div class="presence-chips">
+            <span class="pres-chip" id="presence-B-A">
+              <span class="status-dot bg-A"></span> Alice: <span class="status-text">ONLINE</span>
+            </span>
+            <span class="pres-chip" id="presence-B-C">
+              <span class="status-dot bg-C"></span> Charlie: <span class="status-text">ONLINE</span>
+            </span>
           </div>
         </div>
 
-        <div class="tracking-timeline-stepper">
-          <!-- Connector Line -->
-          <div class="timeline-connector-line" id="timeline-line"></div>
-          
-          <!-- Steppers -->
-          <div class="timeline-step" id="step-pending">
-            <div class="step-circle">1</div>
-            <div class="step-label">
-              <h5>Weighed & Stamped</h5>
-              <p>Items weighed by hand on copper scales</p>
-            </div>
-          </div>
-
-          <div class="timeline-step" id="step-weighed">
-            <div class="step-circle">2</div>
-            <div class="step-label">
-              <h5>Cured & Casked</h5>
-              <p>Sealed in air-tight spice jars for transit</p>
-            </div>
-          </div>
-
-          <div class="timeline-step" id="step-dispatched">
-            <div class="step-circle">3</div>
-            <div class="step-label">
-              <h5>Out for Delivery</h5>
-              <p>Rider dispatched from Jodhpur Old Bazaar</p>
-            </div>
-          </div>
-
-          <div class="timeline-step" id="step-delivered">
-            <div class="step-circle">4</div>
-            <div class="step-label">
-              <h5>Handed Over</h5>
-              <p>Delivered to your home step</p>
-            </div>
-          </div>
+        <div class="editor-wrapper">
+          <div id="editor-B" class="editor-pane" tabindex="0" data-site="B"></div>
+          <div class="focus-indicator"></div>
         </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- Reviews & Feedback Section -->
-  <section class="reviews-section" id="reviews-section">
-    <div class="reviews-container">
-      <div class="reviews-list-column">
-        <span class="section-pre">Social Proof</span>
-        <h2 class="section-title">Loved by Jodhpur Homemakers</h2>
-        
-        <div class="reviews-grid" id="reviews-list">
-          <!-- Reviews load dynamically -->
-        </div>
-      </div>
+        <footer class="card-footer">
+          <div class="footer-metric">
+            <span class="metric-lbl">VISIBLE LENGTH</span>
+            <span id="char-count-B" class="metric-val">0</span>
+          </div>
+          <div class="footer-metric">
+            <span class="metric-lbl">DATABASE OPS SEEN</span>
+            <span id="ops-seen-B" class="metric-val font-mono">0</span>
+          </div>
+        </footer>
+      </article>
 
-      <div class="review-form-column">
-        <div class="review-form-card">
-          <h4>Leave a Review</h4>
-          <p>Shared your experience? We weigh every piece of feedback on our scales.</p>
-          
-          <form id="add-review-form">
-            <div class="form-group">
-              <label for="review-name">Your Full Name</label>
-              <input type="text" id="review-name" required placeholder="e.g. Anand Singh">
-            </div>
-            
-            <div class="form-group">
-              <label>Your Rating</label>
-              <div class="star-rating-picker" id="star-picker">
-                <span class="star-picker-item" data-value="5">★</span>
-                <span class="star-picker-item" data-value="4">★</span>
-                <span class="star-picker-item" data-value="3">★</span>
-                <span class="star-picker-item" data-value="2">★</span>
-                <span class="star-picker-item" data-value="1">★</span>
-              </div>
-              <input type="hidden" id="review-rating" value="5" required>
-            </div>
-
-            <div class="form-group">
-              <label for="review-comment">Your Message</label>
-              <textarea id="review-comment" rows="4" required placeholder="Tell us about the aroma, taste, and speed of service..."></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-block">Post Review</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Visit & Contact Section -->
-  <section class="contact-section" id="contact-section">
-    <div class="contact-container">
-      <div class="contact-info-column">
-        <span class="section-pre">Reach Us</span>
-        <h2 class="section-title">Drop by the Bhandar</h2>
-        <p>Located on the bustling Kotwali Road, our physical shop is open every day. In Jodhpur city? Order online and get it in 15-20 minutes.</p>
-        
-        <div class="contact-details">
-          <div class="contact-detail-item">
-            <span class="contact-icon">📍</span>
+      <!-- Replica C: Charlie -->
+      <article class="replica-card site-C" data-site="C">
+        <header class="card-header">
+          <div class="user-profile">
+            <div class="avatar bg-C">C</div>
             <div>
-              <h5>Physical Address</h5>
-              <p><a href="https://maps.google.com" target="_blank" rel="noopener" id="maps-link">69 Kotwali Road, Old City, Jodhpur, Rajasthan (342001)</a></p>
+              <h3>Charlie</h3>
+              <span class="site-label">Local Replica ID: C</span>
             </div>
           </div>
-          <div class="contact-detail-item">
-            <span class="contact-icon">📞</span>
-            <div>
-              <h5>Phone Number</h5>
-              <p>+91 291 2643789 / +91 98290 12345</p>
-            </div>
-          </div>
-          <div class="contact-detail-item">
-            <span class="contact-icon">⏰</span>
-            <div>
-              <h5>Bazaar Timings</h5>
-              <p>Daily: 9:00 AM – 8:30 PM (Sundays open until 2:00 PM)</p>
-            </div>
-          </div>
+          <button id="toggle-C" class="status-pill online">ONLINE</button>
+        </header>
+
+        <!-- Network connection visual ribbon -->
+        <div class="connection-status-ribbon online" id="ribbon-C">
+          <svg class="icon-conn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+          <span class="conn-text">Active connection to global log</span>
         </div>
-      </div>
 
-      <div class="contact-form-column">
-        <div class="contact-form-card">
-          <h4>Inquire or Place Custom Orders</h4>
-          <p>Need bulk spice blends for events, weddings, or wholesale? Drop us a query.</p>
-          
-          <form id="contact-form">
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="contact-name">Full Name</label>
-                <input type="text" id="contact-name" required placeholder="e.g. Ramesh Kumar">
-              </div>
-              <div class="form-group">
-                <label for="contact-email">Email Address</label>
-                <input type="email" id="contact-email" required placeholder="name@example.com">
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="contact-phone">Phone Number (Optional)</label>
-              <input type="tel" id="contact-phone" placeholder="e.g. +91 99999 88888">
-            </div>
-
-            <div class="form-group">
-              <label for="contact-message">Your Message</label>
-              <textarea id="contact-message" rows="4" required placeholder="Describe what spice or wholesale packing details you need..."></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-block" id="contact-submit-btn">Send Message</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer class="site-footer">
-    <div class="footer-container">
-      <div class="footer-brand">
-        <h3>⚖️ Nirmal Masala Bhandar</h3>
-        <p>Sustaining the royal aroma of Jodhpur spice craft since 1972. Weighed by hand, verified by trust.</p>
-      </div>
-      <div class="footer-links">
-        <h4>Browse</h4>
-        <a href="#shop-section">Shop Categories</a>
-        <a href="#about-section">Our Story</a>
-        <a href="#reviews-section">Write Review</a>
-        <a href="https://github.com/anujsinghh778/nirmal-masala-bhandar-webapp-" target="_blank" rel="noopener" style="font-weight: 600;">💻 GitHub Code</a>
-      </div>
-      <div class="footer-social">
-        <h4>Follow Our Bazaar</h4>
-        <div class="social-icons">
-          <a href="https://instagram.com" target="_blank" rel="noopener" aria-label="Instagram">📸 Instagram</a>
-          <a href="https://facebook.com" target="_blank" rel="noopener" aria-label="Facebook">👤 Facebook</a>
-        </div>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <p>&copy; 2026 Nirmal Masala Bhandar. All rights reserved. Built with pride in Rajasthan.</p>
-    </div>
-  </footer>
-
-  <!-- Slide-out Cart Drawer -->
-  <div class="cart-drawer-overlay" id="cart-overlay"></div>
-  <div class="cart-drawer" id="cart-drawer">
-    <div class="cart-drawer-header">
-      <h3>Your Spice Bag</h3>
-      <button class="close-drawer-btn" id="close-cart-btn" aria-label="Close cart">&times;</button>
-    </div>
-    
-    <!-- UPGRADE: Free Gift Progress Bar -->
-    <div class="free-gift-progress-container" id="gift-progress-box">
-      <div class="gift-progress-text">
-        <span>🎁 Gift Spoon Progress:</span>
-        <span id="gift-progress-status">Add ₹150 more for a Hand-carved Brass Spoon!</span>
-      </div>
-      <div class="gift-progress-bar-bg">
-        <div class="gift-progress-bar-fill" id="gift-progress-fill" style="width: 0%;"></div>
-      </div>
-    </div>
-    
-    <!-- Cart Items list -->
-    <div class="cart-drawer-items" id="cart-items-container">
-      <div class="empty-cart-message">
-        <span>🛒</span>
-        <p>Your bag is empty. Explore the bazaar to add heritage spices!</p>
-        <a href="#shop-section" class="btn btn-secondary close-drawer-action">Shop Spices</a>
-      </div>
-    </div>
-    
-    <div class="cart-drawer-footer" id="cart-footer">
-      <div class="cart-summary-row">
-        <span>Subtotal:</span>
-        <span class="cart-summary-total" id="cart-subtotal">₹0.00</span>
-      </div>
-      <p class="cart-delivery-note">⚡ Free 15-minute quick delivery in Jodhpur city limits.</p>
-      <button class="btn btn-primary btn-block" id="checkout-btn">Proceed to Checkout</button>
-    </div>
-  </div>
-
-  <!-- Checkout Modal -->
-  <div class="modal-overlay" id="checkout-modal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3>Weighing & Dispatch details</h3>
-        <button class="close-modal-btn" id="close-checkout-btn">&times;</button>
-      </div>
-      
-      <div class="modal-body">
-        <!-- Order details summary -->
-        <div class="checkout-summary-box">
-          <h5>Order Summary</h5>
-          <ul id="checkout-items-list" class="checkout-items-list">
-            <!-- Dynamically populated -->
-          </ul>
-          <div class="checkout-total-row">
-            <span>Amount to Pay:</span>
-            <strong id="checkout-total-amount">₹0.00</strong>
+        <div class="presence-bar">
+          <span class="presence-hdr">Presence List:</span>
+          <div class="presence-chips">
+            <span class="pres-chip" id="presence-C-A">
+              <span class="status-dot bg-A"></span> Alice: <span class="status-text">ONLINE</span>
+            </span>
+            <span class="pres-chip" id="presence-C-B">
+              <span class="status-dot bg-B"></span> Bob: <span class="status-text">ONLINE</span>
+            </span>
           </div>
         </div>
 
-        <!-- Form details -->
-        <form id="checkout-form">
-          <div class="form-group">
-            <label for="cust-name">Name of Customer</label>
-            <input type="text" id="cust-name" required placeholder="e.g. Kunal Rathore">
-          </div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="cust-email">Email Address</label>
-              <input type="email" id="cust-email" required placeholder="name@domain.com">
-            </div>
-            <div class="form-group">
-              <label for="cust-phone">Jodhpur Contact Number</label>
-              <input type="tel" id="cust-phone" required placeholder="10-digit mobile number">
-            </div>
-          </div>
-          <div class="form-group">
-            <div class="address-label-row">
-              <label for="cust-address">Delivery Address (Jodhpur)</label>
-              <button type="button" class="gps-locator-btn" id="gps-autofill-btn" title="Autofill current location via GPS">
-                📍 Get Current Location
-              </button>
-            </div>
-            <textarea id="cust-address" rows="3" required placeholder="e.g. Plot 43-A, Near Shastri Circle, Shastri Nagar, Jodhpur"></textarea>
-            <div id="gps-status-feedback" class="gps-status-msg"></div>
-          </div>
-
-          <!-- UPGRADE: Luxury Packaging Option -->
-          <div class="form-group">
-            <label>Select Packaging Option</label>
-            <div class="packaging-options-grid">
-              <div class="packaging-option-card active" data-pack="jute">
-                <span class="pack-icon">🌾</span>
-                <div class="pack-details">
-                  <span class="pack-name">Eco Jute Pouch</span>
-                  <span class="pack-price">Free</span>
-                </div>
-              </div>
-              <div class="packaging-option-card" data-pack="brass">
-                <span class="pack-icon">🏺</span>
-                <div class="pack-details">
-                  <span class="pack-name">Royal Brass Box</span>
-                  <span class="pack-price">+₹149.00</span>
-                </div>
-              </div>
-            </div>
-            <input type="hidden" id="selected-packaging" value="jute">
-          </div>
-
-          <!-- UPGRADE: Payment Method Tabs -->
-          <div class="form-group">
-            <label>Payment Method</label>
-            <div class="payment-tabs-container">
-              <button type="button" class="payment-tab active" data-method="COD">💵 COD</button>
-              <button type="button" class="payment-tab" data-method="UPI">📱 UPI QR</button>
-              <button type="button" class="payment-tab" data-method="Card">💳 Card</button>
-            </div>
-            <input type="hidden" id="selected-payment-method" value="COD">
-          </div>
-
-          <!-- UPGRADE: Payment Details Panels -->
-          <div class="payment-details-panel active" id="panel-COD">
-            <p class="payment-note-text">💼 Cash on Delivery is free. Pay with cash or any local scanner at your doorstep upon arrival.</p>
-          </div>
-
-          <div class="payment-details-panel" id="panel-UPI">
-            <div class="upi-container">
-              <div class="form-group">
-                <label for="upi-id-input">UPI ID (Optional)</label>
-                <input type="text" id="upi-id-input" placeholder="e.g. name@upi or mobile@paytm">
-              </div>
-              <div class="text-center" style="font-size:0.75rem; color:var(--text-muted); margin:0.5rem 0;">— OR —</div>
-              <button type="button" class="btn btn-secondary btn-block" id="show-qr-btn">⚡ Show Instant Payment QR Code</button>
-              
-              <!-- Hidden QR scan simulator box -->
-              <div class="qr-simulator-box hidden" id="qr-simulator">
-                <div class="qr-spinner" id="qr-loader">Weighing transaction...</div>
-                <div class="qr-code-wrapper hidden" id="qr-graphic-wrapper">
-                  <svg viewBox="0 0 100 100" width="120" height="120" class="qr-svg-graphic" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="100" height="100" fill="#fff" />
-                    <rect x="5" y="5" width="30" height="30" fill="#1b1008" />
-                    <rect x="10" y="10" width="20" height="20" fill="#fff" />
-                    <rect x="15" y="15" width="10" height="10" fill="#1b1008" />
-                    
-                    <rect x="65" y="5" width="30" height="30" fill="#1b1008" />
-                    <rect x="70" y="10" width="20" height="20" fill="#fff" />
-                    <rect x="75" y="15" width="10" height="10" fill="#1b1008" />
-                    
-                    <rect x="5" y="65" width="30" height="30" fill="#1b1008" />
-                    <rect x="10" y="70" width="20" height="20" fill="#fff" />
-                    <rect x="15" y="75" width="10" height="10" fill="#1b1008" />
-                    
-                    <rect x="40" y="10" width="10" height="10" fill="#1b1008" />
-                    <rect x="50" y="20" width="10" height="10" fill="#1b1008" />
-                    <rect x="45" y="35" width="15" height="10" fill="#1b1008" />
-                    <rect x="10" y="45" width="10" height="15" fill="#1b1008" />
-                    <rect x="25" y="50" width="15" height="10" fill="#1b1008" />
-                    <rect x="40" y="65" width="10" height="25" fill="#1b1008" />
-                    <rect x="55" y="75" width="15" height="10" fill="#1b1008" />
-                    <rect x="75" y="45" width="20" height="10" fill="#1b1008" />
-                    <rect x="80" y="60" width="10" height="30" fill="#1b1008" />
-                  </svg>
-                  <p class="qr-instruction-text" style="font-size:0.75rem; margin-top:0.4rem; color:var(--text-main);">Scan to pay <strong id="qr-price-total" class="text-gold">₹0.00</strong></p>
-                  <span class="qr-badge-success" style="font-size:0.65rem; color:var(--accent-green);">🔒 BHIM UPI Secured</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="payment-details-panel" id="panel-Card">
-            <div class="card-checkout-form">
-              <div class="form-group">
-                <label for="card-name-input">Name on Card</label>
-                <input type="text" id="card-name-input" placeholder="e.g. Kunal Rathore">
-              </div>
-              <div class="form-group">
-                <label for="card-num-input">Card Number</label>
-                <div class="card-number-wrapper" style="position:relative;">
-                  <input type="text" id="card-num-input" placeholder="4111 2222 3333 4444" maxlength="19">
-                  <span class="card-type-icon" id="card-logo-badge" style="position:absolute; right:10px; top:12px; font-size:1.1rem;">💳</span>
-                </div>
-              </div>
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="card-expiry-input">Expiry Date</label>
-                  <input type="text" id="card-expiry-input" placeholder="MM/YY" maxlength="5">
-                </div>
-                <div class="form-group">
-                  <label for="card-cvv-input">CVV Code</label>
-                  <input type="password" id="card-cvv-input" placeholder="***" maxlength="3">
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <button type="submit" class="btn btn-primary btn-block" id="place-order-btn" style="margin-top:1.5rem;">Confirm Order (Cash on Delivery)</button>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Order Success Modal -->
-  <div class="modal-overlay" id="success-modal">
-    <div class="modal-card success-card">
-      <div class="modal-body text-center">
-        <div class="success-icon">✨⚖️✨</div>
-        <h3>Order Weighed & Dispatched!</h3>
-        <p class="success-message-text">Your hand-weighed spice package is being packed. Our local delivery rider will arrive shortly.</p>
-        
-        <div class="success-details-box">
-          <div class="success-detail-row">
-            <span>Order Number:</span>
-            <strong id="success-order-num" class="text-glow">NMB-2026-XXXX</strong>
-          </div>
-          <div class="success-detail-row">
-            <span>Expected Delivery:</span>
-            <strong class="highlight-text">15 - 20 Minutes</strong>
-          </div>
-          <div class="success-detail-row">
-            <span>Total Amount:</span>
-            <strong id="success-total-amt">₹0.00</strong>
-          </div>
+        <div class="editor-wrapper">
+          <div id="editor-C" class="editor-pane" tabindex="0" data-site="C"></div>
+          <div class="focus-indicator"></div>
         </div>
-        
-        <button class="btn btn-primary" id="close-success-btn">Back to Bazaar</button>
+
+        <footer class="card-footer">
+          <div class="footer-metric">
+            <span class="metric-lbl">VISIBLE LENGTH</span>
+            <span id="char-count-C" class="metric-val">0</span>
+          </div>
+          <div class="footer-metric">
+            <span class="metric-lbl">DATABASE OPS SEEN</span>
+            <span id="ops-seen-C" class="metric-val font-mono">0</span>
+          </div>
+        </footer>
+      </article>
+
+    </main>
+
+    <!-- Operations Telemetry Console -->
+    <section class="telemetry-console">
+      <header class="console-header">
+        <div class="console-title-group">
+          <span class="terminal-ring"></span>
+          <h2>SEQUENCED DATABASE TRANSACTION LEDGER</h2>
+        </div>
+        <div class="console-filters">
+          <span class="filter-lbl">Filter Source:</span>
+          <button class="filter-btn active" data-filter="all">ALL</button>
+          <button class="filter-btn" data-filter="A">ALICE (A)</button>
+          <button class="filter-btn" data-filter="B">BOB (B)</button>
+          <button class="filter-btn" data-filter="C">CHARLIE (C)</button>
+        </div>
+      </header>
+
+      <div class="terminal-window">
+        <div id="sync-log-entries" class="terminal-body font-mono">
+          <!-- Populated dynamically -->
+        </div>
       </div>
-    </div>
+    </section>
+
   </div>
 
   <script src="app.js"></script>

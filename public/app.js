@@ -1,1182 +1,1084 @@
-// Nirmal Masala Bhandar - Upgraded Frontend Logic
+// ==========================================================================
+// CRDT RGA Sequence Core Functions
+// ==========================================================================
 
-// Global State
-let cart = JSON.parse(localStorage.getItem('nmb_cart')) || [];
-let categories = [];
-let products = [];
-let reviews = [];
-let currentCategory = 'all';
-let selectedProduct = null;
+function compareIds(id1, id2) {
+  if (id1.clock !== id2.clock) {
+    return id1.clock - id2.clock;
+  }
+  return id1.site < id2.site ? -1 : (id1.site > id2.site ? 1 : 0);
+}
 
-// DOM Elements
-const categoryChips = document.getElementById('category-chips');
-const productsGrid = document.getElementById('products-grid');
-const cartCount = document.getElementById('cart-count');
-const cartDrawer = document.getElementById('cart-drawer');
-const cartOverlay = document.getElementById('cart-overlay');
-const openCartBtn = document.getElementById('open-cart-btn');
-const closeCartBtn = document.getElementById('close-cart-btn');
-const cartItemsContainer = document.getElementById('cart-items-container');
-const cartSubtotal = document.getElementById('cart-subtotal');
-const checkoutBtn = document.getElementById('checkout-btn');
-const cartFooter = document.getElementById('cart-footer');
+function nodeIdKey(id) {
+  if (!id) return 'start';
+  return `${id.site}:${id.clock}`;
+}
 
-// Advanced Filters
-const productSearch = document.getElementById('product-search');
-const sortSelect = document.getElementById('sort-select');
-const priceMin = document.getElementById('price-min');
-const priceMax = document.getElementById('price-max');
+function findNodeIndex(nodes, id) {
+  if (!id) return -1;
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].id.site === id.site && nodes[i].id.clock === id.clock) {
+      return i;
+    }
+  }
+  return -1;
+}
 
-// Detail Modal Sheet
-const productDetailModal = document.getElementById('product-detail-modal');
-const closeDetailBtn = document.getElementById('close-detail-btn');
-const modalProductCategory = document.getElementById('modal-product-category');
-const modalProductImageContainer = document.getElementById('modal-product-image-container');
-const modalProductOrigin = document.getElementById('modal-product-origin');
-const modalProductName = document.getElementById('modal-product-name');
-const modalProductPrice = document.getElementById('modal-product-price');
-const modalProductUnit = document.getElementById('modal-product-unit');
-const modalProductDesc = document.getElementById('modal-product-desc');
-const modalProductBenefits = document.getElementById('modal-product-benefits');
-const modalProductStory = document.getElementById('modal-product-story');
-const detailQtyInput = document.getElementById('detail-qty-input');
-const detailQtyMinus = document.getElementById('detail-qty-minus');
-const detailQtyPlus = document.getElementById('detail-qty-plus');
-const modalAddToCartBtn = document.getElementById('modal-add-to-cart-btn');
+// Integrates a new node into the RGA list
+function integrateNode(replica, node) {
+  const key = nodeIdKey(node.id);
+  if (replica.appliedIds.has(key)) {
+    return;
+  }
 
-// Checkout Modals
-const checkoutModal = document.getElementById('checkout-modal');
-const closeCheckoutBtn = document.getElementById('close-checkout-btn');
-const checkoutForm = document.getElementById('checkout-form');
-const checkoutItemsList = document.getElementById('checkout-items-list');
-const checkoutTotalAmount = document.getElementById('checkout-total-amount');
-const gpsAutofillBtn = document.getElementById('gps-autofill-btn');
-const gpsStatusFeedback = document.getElementById('gps-status-feedback');
-const custAddressText = document.getElementById('cust-address');
+  // Find origin index
+  let originIdx = -1;
+  if (node.origin !== null) {
+    originIdx = findNodeIndex(replica.nodes, node.origin);
+    if (originIdx === -1) {
+      // Out-of-order delivery: origin has not arrived yet! Buffer it.
+      if (!replica.pendingInserts.some(n => nodeIdKey(n.id) === key)) {
+        replica.pendingInserts.push(node);
+      }
+      return;
+    }
+  }
 
-const successModal = document.getElementById('success-modal');
-const closeSuccessBtn = document.getElementById('close-success-btn');
-const successOrderNum = document.getElementById('success-order-num');
-const successTotalAmt = document.getElementById('success-total-amt');
+  // Find insertion index
+  let insertIdx = originIdx + 1;
+  while (insertIdx < replica.nodes.length) {
+    const nextNode = replica.nodes[insertIdx];
+    let nextOriginIdx = -1;
+    if (nextNode.origin !== null) {
+      nextOriginIdx = findNodeIndex(replica.nodes, nextNode.origin);
+    }
 
-// Order Tracking Widget
-const orderTrackingForm = document.getElementById('order-tracking-form');
-const trackOrderNumberInput = document.getElementById('track-order-number');
-const trackingResultsCard = document.getElementById('tracking-results-card');
-const trackDispNumber = document.getElementById('track-disp-number');
-const trackDispCustomer = document.getElementById('track-disp-customer');
-const trackDispTotal = document.getElementById('track-disp-total');
-const trackDispStatusBadge = document.getElementById('track-disp-status-badge');
-const timelineLine = document.getElementById('timeline-line');
-const stepPending = document.getElementById('step-pending');
-const stepWeighed = document.getElementById('step-weighed');
-const stepDispatched = document.getElementById('step-dispatched');
-const stepDelivered = document.getElementById('step-delivered');
+    if (nextOriginIdx < originIdx) {
+      // Next node's origin is before our origin. Since nodes are ordered, stop.
+      break;
+    } else if (nextOriginIdx === originIdx) {
+      // Sibling node (same origin). Break tie deterministically.
+      // Higher (clock, site) wins the left slot.
+      if (compareIds(nextNode.id, node.id) > 0) {
+        insertIdx++;
+      } else {
+        break;
+      }
+    } else { // nextOriginIdx > originIdx
+      // Next node is a descendant of a sibling or node to the right. Skip it.
+      insertIdx++;
+    }
+  }
 
-// Review Form & Picker
-const reviewForm = document.getElementById('add-review-form');
-const starPicker = document.getElementById('star-picker');
-const reviewRatingInput = document.getElementById('review-rating');
-const reviewsList = document.getElementById('reviews-list');
+  // Splice node in
+  replica.nodes.splice(insertIdx, 0, node);
+  replica.appliedIds.add(key);
 
-// Contact Form
-const contactForm = document.getElementById('contact-form');
+  // Apply any pending deletes
+  if (replica.pendingDeletes.has(key)) {
+    node.deleted = true;
+    replica.pendingDeletes.delete(key);
+  }
 
-// Emojis for Art Category Fallbacks
-const categoryEmojis = {
-  'whole-spices': '🌾',
-  'ground-masala': '🌶️',
-  'signature-chai': '☕',
-  'dry-fruits': '🌰',
-  'pickles-ghee': '🏺'
+  // Trigger any pending inserts that are now unblocked
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (let i = 0; i < replica.pendingInserts.length; i++) {
+      const pNode = replica.pendingInserts[i];
+      let pOriginIdx = -1;
+      if (pNode.origin !== null) {
+        pOriginIdx = findNodeIndex(replica.nodes, pNode.origin);
+      }
+      if (pNode.origin === null || pOriginIdx !== -1) {
+        replica.pendingInserts.splice(i, 1);
+        integrateNode(replica, pNode);
+        progress = true;
+        break;
+      }
+    }
+  }
+}
+
+// Applies a delete tombstone
+function applyDelete(replica, targetId) {
+  const key = nodeIdKey(targetId);
+  const idx = findNodeIndex(replica.nodes, targetId);
+  if (idx !== -1) {
+    replica.nodes[idx].deleted = true;
+  } else {
+    // Out-of-order delete: remember it
+    replica.pendingDeletes.add(key);
+  }
+}
+
+// Get the previous visible node ID from a given node
+function getVisiblePreviousNodeId(replica, targetNode) {
+  const idx = findNodeIndex(replica.nodes, targetNode.id);
+  if (idx === -1) return null;
+  for (let i = idx - 1; i >= 0; i--) {
+    if (!replica.nodes[i].deleted) {
+      return replica.nodes[i].id;
+    }
+  }
+  return null;
+}
+
+// Get the previous visible node ID from a given node ID
+function getVisiblePreviousNodeIdById(replica, targetId) {
+  const idx = findNodeIndex(replica.nodes, targetId);
+  if (idx === -1) return null;
+  for (let i = idx - 1; i >= 0; i--) {
+    if (!replica.nodes[i].deleted) {
+      return replica.nodes[i].id;
+    }
+  }
+  return null;
+}
+
+// Maps caret cursor pos to actual visible node it attaches to
+function getCaretAttachment(replica, posId) {
+  if (posId === null) return null;
+  const idx = findNodeIndex(replica.nodes, posId);
+  if (idx === -1) return null;
+  for (let i = idx; i >= 0; i--) {
+    if (!replica.nodes[i].deleted) {
+      return replica.nodes[i].id;
+    }
+  }
+  return null;
+}
+
+// ==========================================================================
+// Client State & App Configuration
+// ==========================================================================
+
+const replicas = {
+  A: createReplicaObject('A', 'Alice', '#ff6b4a'),
+  B: createReplicaObject('B', 'Bob', '#00e5ff'),
+  C: createReplicaObject('C', 'Charlie', '#baff00')
 };
+const allReplicas = [replicas.A, replicas.B, replicas.C];
 
-// ----------------------------------------------------
-// INITIALIZATION
-// ----------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-  fetchCategories();
-  fetchProducts();
-  fetchReviews();
-  updateCartBadge();
-  setupEventListeners();
+const loggedSeqs = new Set();
+const latencySlider = document.getElementById('latency-slider');
+const latencyValEl = document.getElementById('latency-val');
+let showTombstones = false;
+let currentLogFilter = 'all';
+
+function getSimulatedLatency() {
+  return parseInt(latencySlider.value, 10);
+}
+
+latencySlider.addEventListener('input', () => {
+  latencyValEl.textContent = `${latencySlider.value}ms`;
 });
 
-// Setup Event Listeners
-function setupEventListeners() {
-  // Cart Drawer open/close
-  openCartBtn.addEventListener('click', openCart);
-  closeCartBtn.addEventListener('click', closeCart);
-  cartOverlay.addEventListener('click', closeCart);
-
-  // Close drawer links inside empty state
-  document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('close-drawer-action')) {
-      closeCart();
-    }
-  });
-
-  // Advanced Filter keyup/change triggers
-  productSearch.addEventListener('input', debounce(fetchProducts, 400));
-  sortSelect.addEventListener('change', fetchProducts);
-  priceMin.addEventListener('input', debounce(fetchProducts, 400));
-  priceMax.addEventListener('input', debounce(fetchProducts, 400));
-
-  // Product detail modal closures
-  closeDetailBtn.addEventListener('click', closeProductDetail);
-  detailQtyMinus.addEventListener('click', () => adjustDetailQty(-1));
-  detailQtyPlus.addEventListener('click', () => adjustDetailQty(1));
-  modalAddToCartBtn.addEventListener('click', handleModalAddToCart);
-
-  // Checkout modal triggers
-  checkoutBtn.addEventListener('click', openCheckout);
-  closeCheckoutBtn.addEventListener('click', closeCheckout);
-  checkoutForm.addEventListener('submit', handleCheckoutSubmit);
-
-  // GPS Autofill geolocation trigger
-  gpsAutofillBtn.addEventListener('click', handleGPSAutofill);
-
-  // Live Order Tracking Search
-  orderTrackingForm.addEventListener('submit', handleOrderTrackingSearch);
-
-  // Success Modal close
-  closeSuccessBtn.addEventListener('click', () => {
-    successModal.classList.remove('active');
-  });
-
-  // Star Rating Picker
-  if (starPicker) {
-    const starItems = starPicker.querySelectorAll('.star-picker-item');
-    starItems.forEach(item => {
-      item.addEventListener('click', (e) => {
-        const value = e.target.getAttribute('data-value');
-        reviewRatingInput.value = value;
-        
-        starItems.forEach(star => {
-          const starVal = star.getAttribute('data-value');
-          if (parseInt(starVal) <= parseInt(value)) {
-            star.classList.add('active');
-          } else {
-            star.classList.remove('active');
-          }
-        });
-      });
-    });
-  }
-
-  // Review Submit
-  reviewForm.addEventListener('submit', handleReviewSubmit);
-
-  // Contact Submit
-  contactForm.addEventListener('submit', handleContactSubmit);
-
-  // UPGRADE: Payment Method Tab Switching
-  const paymentTabs = document.querySelectorAll('.payment-tab');
-  const paymentPanels = document.querySelectorAll('.payment-details-panel');
-  const selectedPaymentMethodInput = document.getElementById('selected-payment-method');
-  const placeOrderBtn = document.getElementById('place-order-btn');
-
-  paymentTabs.forEach(tab => {
-    tab.addEventListener('click', (e) => {
-      paymentTabs.forEach(t => t.classList.remove('active'));
-      paymentPanels.forEach(p => p.classList.remove('active'));
-
-      e.currentTarget.classList.add('active');
-      const method = e.currentTarget.getAttribute('data-method');
-      selectedPaymentMethodInput.value = method;
-      document.getElementById(`panel-${method}`).classList.add('active');
-
-      // Update place order button text to reflect payment choice
-      if (method === 'COD') {
-        placeOrderBtn.textContent = 'Confirm Order (Cash on Delivery)';
-      } else if (method === 'UPI') {
-        placeOrderBtn.textContent = 'Pay via UPI & Confirm Order';
-      } else {
-        placeOrderBtn.textContent = 'Pay with Card & Confirm Order';
-      }
-    });
-  });
-
-  // UPGRADE: Card number and expiry input formatting
-  const cardNumInput = document.getElementById('card-num-input');
-  const cardLogoBadge = document.getElementById('card-logo-badge');
-  if (cardNumInput) {
-    cardNumInput.addEventListener('input', (e) => {
-      let value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-      let formatted = '';
-      for (let i = 0; i < value.length; i++) {
-        if (i > 0 && i % 4 === 0) {
-          formatted += ' ';
-        }
-        formatted += value[i];
-      }
-      e.target.value = formatted;
-
-      if (value.startsWith('4')) {
-        cardLogoBadge.textContent = 'Visa';
-      } else if (value.startsWith('5')) {
-        cardLogoBadge.textContent = 'Mastercard';
-      } else if (value.startsWith('6')) {
-        cardLogoBadge.textContent = 'RuPay';
-      } else {
-        cardLogoBadge.textContent = '💳';
-      }
-    });
-  }
-
-  const cardExpiryInput = document.getElementById('card-expiry-input');
-  if (cardExpiryInput) {
-    cardExpiryInput.addEventListener('input', (e) => {
-      let value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-      if (value.length > 2) {
-        e.target.value = value.substring(0, 2) + '/' + value.substring(2, 4);
-      } else {
-        e.target.value = value;
-      }
-    });
-  }
-
-  // UPGRADE: QR Code Simulator
-  const showQrBtn = document.getElementById('show-qr-btn');
-  const qrSimulator = document.getElementById('qr-simulator');
-  const qrLoader = document.getElementById('qr-loader');
-  const qrGraphicWrapper = document.getElementById('qr-graphic-wrapper');
-  const qrPriceTotal = document.getElementById('qr-price-total');
-
-  if (showQrBtn) {
-    showQrBtn.addEventListener('click', () => {
-      qrSimulator.classList.remove('hidden');
-      qrLoader.classList.remove('hidden');
-      qrGraphicWrapper.classList.add('hidden');
-
-      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      qrPriceTotal.textContent = `₹${subtotal.toFixed(2)}`;
-
-      setTimeout(() => {
-        qrLoader.classList.add('hidden');
-        qrGraphicWrapper.classList.remove('hidden');
-      }, 1200);
-    });
-  }
-}
-
-// Debounce helper to prevent flooding API requests
-function debounce(func, delay) {
-  let debounceTimer;
-  return function() {
-    const context = this;
-    const args = arguments;
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => func.apply(context, args), delay);
+function createReplicaObject(siteId, name, color) {
+  return {
+    siteId,
+    name,
+    color,
+    nodes: [],
+    appliedSeqs: new Set(),
+    appliedIds: new Set(),
+    pendingDeletes: new Set(),
+    pendingInserts: [],
+    clock: 0,
+    caretPosId: null,
+    online: true,
+    syncing: false,
+    lastSeenSeq: 0,
+    remoteCursors: {},
+    sseSource: null,
+    outboundQueue: []
   };
 }
 
-// ----------------------------------------------------
-// API FETCH OPERATIONS
-// ----------------------------------------------------
-
-// Fetch Categories
-async function fetchCategories() {
-  try {
-    const res = await fetch('/api/categories');
-    const result = await res.json();
-    if (result.status === 'success') {
-      categories = result.data;
-      renderCategoryChips();
-    }
-  } catch (error) {
-    console.error('Error loading categories:', error);
-  }
-}
-
-// Fetch Products (supports filters and sorts)
-async function fetchProducts() {
-  try {
-    const search = productSearch.value.trim();
-    const sort = sortSelect.value;
-    const min = priceMin.value;
-    const max = priceMax.value;
-    
-    let url = `/api/products?category_id=${currentCategory}`;
-    if (search) url += `&search=${encodeURIComponent(search)}`;
-    if (sort) url += `&sort=${sort}`;
-    if (min) url += `&min_price=${min}`;
-    if (max) url += `&max_price=${max}`;
-
-    const res = await fetch(url);
-    const result = await res.json();
-    if (result.status === 'success') {
-      products = result.data;
-      renderProducts();
-    }
-  } catch (error) {
-    console.error('Error loading products:', error);
-    productsGrid.innerHTML = `<div class="loading-spinner">Failed to connect to the bazaar database. Please reload.</div>`;
-  }
-}
-
-// Fetch Reviews
-async function fetchReviews() {
-  try {
-    const res = await fetch('/api/reviews');
-    const result = await res.json();
-    if (result.status === 'success') {
-      reviews = result.data;
-      renderReviews();
-    }
-  } catch (error) {
-    console.error('Error loading reviews:', error);
-  }
-}
-
-// ----------------------------------------------------
-// UI RENDERING
-// ----------------------------------------------------
-
-// Render Category Chips
-function renderCategoryChips() {
-  let html = `<button class="filter-chip ${currentCategory === 'all' ? 'active' : ''}" data-id="all">All Selections</button>`;
+// Reset replica local states
+function resetLocalReplicaState(replica) {
+  replica.nodes = [];
+  replica.appliedSeqs.clear();
+  replica.appliedIds.clear();
+  replica.pendingDeletes.clear();
+  replica.pendingInserts = [];
+  replica.clock = 0;
+  replica.caretPosId = null;
+  replica.lastSeenSeq = 0;
+  replica.remoteCursors = {};
+  replica.outboundQueue = [];
   
-  categories.forEach(cat => {
-    html += `
-      <button class="filter-chip ${currentCategory == cat.id ? 'active' : ''}" data-id="${cat.id}">
-        ${cat.name}
-      </button>
-    `;
-  });
-
-  categoryChips.innerHTML = html;
-
-  // Add click events to chips
-  const chips = categoryChips.querySelectorAll('.filter-chip');
-  chips.forEach(chip => {
-    chip.addEventListener('click', (e) => {
-      chips.forEach(c => c.classList.remove('active'));
-      e.target.classList.add('active');
-      currentCategory = e.target.getAttribute('data-id');
-      fetchProducts();
-    });
-  });
-}
-
-// Render Products Grid
-function renderProducts() {
-  if (products.length === 0) {
-    productsGrid.innerHTML = `<div class="loading-spinner">No products match your search or price criteria.</div>`;
-    return;
+  if (replica.siteId === 'A') {
+    loggedSeqs.clear();
+    const logEl = document.getElementById('sync-log-entries');
+    if (logEl) logEl.innerHTML = '';
   }
 
-  let html = '';
-  products.forEach(p => {
-    const cat = categories.find(c => c.id === p.category_id);
-    const catName = cat ? cat.name : 'Spice Selection';
-    
-    // We display the premium category image if product image is a placeholer
-    const imagePath = p.image || '/images/whole_spices.png';
-
-    html += `
-      <div class="product-card" data-id="${p.id}">
-        <span class="product-origin-badge">📍 ${p.origin || 'Jodhpur'}</span>
-        <div class="product-image-container" onclick="openProductDetail(${p.id})">
-          <img src="${imagePath}" alt="${p.name}" onerror="this.src='/images/whole_spices.png'">
-        </div>
-        <div class="product-details">
-          <h3 class="product-name" onclick="openProductDetail(${p.id})">${p.name}</h3>
-          <p class="product-desc">${p.description}</p>
-          <div class="product-footer">
-            <div class="price-tag">
-              <span class="price-amt">₹${p.price.toFixed(2)}</span>
-              <span class="price-unit">per ${p.unit}</span>
-            </div>
-            
-            <div class="add-actions-group">
-              <div class="qty-control">
-                <button class="qty-btn" onclick="adjustCardQty(${p.id}, -1)">-</button>
-                <input type="number" id="qty-input-${p.id}" value="1" min="1" max="100" onchange="validateQtyField(this)">
-                <button class="qty-btn" onclick="adjustCardQty(${p.id}, 1)">+</button>
-              </div>
-              <button class="add-to-bag-btn" onclick="handleCardAddToCart(${p.id})" aria-label="Add ${p.name} to cart">
-                ➕
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  });
-
-  productsGrid.innerHTML = html;
+  updateReplicaRibbon(replica);
+  renderReplica(replica);
+  checkSystemConvergence();
 }
 
-// Render Reviews List
-function renderReviews() {
-  if (reviews.length === 0) {
-    reviewsList.innerHTML = `<p class="text-center" style="color: var(--text-muted)">Be the first to review our spices!</p>`;
-    return;
+// ==========================================================================
+// Network & Synchronization Controller
+// ==========================================================================
+
+// Connect EventSource (SSE) for real-time updates
+function connectReplicaStream(replica) {
+  if (replica.sseSource) {
+    replica.sseSource.close();
   }
 
-  let html = '';
-  reviews.slice(0, 5).forEach(rev => {
-    const stars = '★'.repeat(rev.rating) + '☆'.repeat(5 - rev.rating);
-    const dateFormatted = new Date(rev.date).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
+  const sse = new EventSource(`/api/crdt/stream?siteId=${replica.siteId}`);
+  replica.sseSource = sse;
 
-    html += `
-      <div class="review-card">
-        <div class="review-card-header">
-          <span class="review-author">${rev.name}</span>
-          <span class="review-stars">${stars}</span>
-        </div>
-        <p class="review-comment">"${rev.comment}"</p>
-        <div class="review-date">${dateFormatted}</div>
-      </div>
-    `;
-  });
+  sse.onmessage = (event) => {
+    if (!replica.online || replica.syncing) return;
 
-  reviewsList.innerHTML = html;
-}
+    const message = JSON.parse(event.data);
+    const latency = getSimulatedLatency();
 
-// ----------------------------------------------------
-// PRODUCT DETAIL LIGHTBOX MODAL
-// ----------------------------------------------------
-
-window.openProductDetail = function(productId) {
-  const product = products.find(p => p.id === productId);
-  if (!product) return;
-
-  selectedProduct = product;
-  const cat = categories.find(c => c.id === product.category_id);
-
-  // Populate Modal Fields
-  modalProductCategory.textContent = cat ? cat.name : 'Heritage Selection';
-  modalProductOrigin.textContent = `Sourced from ${product.origin || 'Jodhpur, Rajasthan'}`;
-  modalProductName.textContent = product.name;
-  modalProductPrice.textContent = `₹${product.price.toFixed(2)}`;
-  modalProductUnit.textContent = `per ${product.unit}`;
-  modalProductDesc.textContent = product.description;
-  modalProductBenefits.textContent = `💡 ${product.health_benefits || 'Sustains energy, boosts immunity, and improves digestion.'}`;
-  modalProductStory.textContent = product.heritage_story || 'Sourced using vintage Jodhpuri recipes passed down through three generations.';
-  
-  // Reset Detail Qty
-  detailQtyInput.value = 1;
-
-  // Set Image
-  modalProductImageContainer.innerHTML = `
-    <img src="${product.image || '/images/whole_spices.png'}" alt="${product.name}" onerror="this.src='/images/whole_spices.png'">
-  `;
-
-  // Open detail overlay
-  productDetailModal.classList.add('active');
-};
-
-function closeProductDetail() {
-  productDetailModal.classList.remove('active');
-  selectedProduct = null;
-}
-
-function adjustDetailQty(delta) {
-  let val = parseInt(detailQtyInput.value, 10);
-  if (isNaN(val)) val = 1;
-  val += delta;
-  if (val < 1) val = 1;
-  if (val > 100) val = 100;
-  detailQtyInput.value = val;
-}
-
-function handleModalAddToCart() {
-  if (!selectedProduct) return;
-  const qty = parseInt(detailQtyInput.value, 10) || 1;
-  addToCart(selectedProduct.id, qty);
-  closeProductDetail();
-}
-
-// ----------------------------------------------------
-// PRODUCT CARD QTY ACTIONS
-// ----------------------------------------------------
-
-window.adjustCardQty = function(productId, delta) {
-  const input = document.getElementById(`qty-input-${productId}`);
-  if (!input) return;
-  let val = parseInt(input.value, 10);
-  if (isNaN(val)) val = 1;
-  val += delta;
-  if (val < 1) val = 1;
-  if (val > 100) val = 100;
-  input.value = val;
-};
-
-window.validateQtyField = function(input) {
-  let val = parseInt(input.value, 10);
-  if (isNaN(val) || val < 1) val = 1;
-  if (val > 100) val = 100;
-  input.value = val;
-};
-
-window.handleCardAddToCart = function(productId) {
-  const input = document.getElementById(`qty-input-${productId}`);
-  const qty = input ? parseInt(input.value, 10) || 1 : 1;
-  addToCart(productId, qty);
-  // Reset card quantity spinner back to 1
-  if (input) input.value = 1;
-};
-
-// ----------------------------------------------------
-// CART & DRAWER ACTIONS
-// ----------------------------------------------------
-
-function openCart() {
-  renderCartDrawer();
-  cartDrawer.classList.add('active');
-  cartOverlay.classList.add('active');
-}
-
-function closeCart() {
-  cartDrawer.classList.remove('active');
-  cartOverlay.classList.remove('active');
-}
-
-// Add item to cart with specific quantity (e.g. 15)
-window.addToCart = function(productId, quantity = 1) {
-  const product = products.find(p => p.id === productId);
-  
-  // If product not found in current listing, check globally or just construct
-  if (!product) return;
-
-  const existingItem = cart.find(item => item.product_id === productId);
-  if (existingItem) {
-    existingItem.quantity += quantity;
-  } else {
-    // Determine category slug for emoji lookup
-    const cat = categories.find(c => c.id === product.category_id);
-    const catSlug = cat ? cat.slug : 'whole-spices';
-
-    cart.push({
-      product_id: product.id,
-      name: product.name,
-      unit: product.unit,
-      price: product.price,
-      quantity: quantity,
-      slug: product.slug
-    });
-  }
-
-  saveCart();
-  updateCartBadge();
-  openCart();
-};
-
-// Change item quantity in cart drawer
-window.updateCartQty = function(productId, delta) {
-  const item = cart.find(item => item.product_id === productId);
-  if (!item) return;
-
-  item.quantity += delta;
-  if (item.quantity <= 0) {
-    cart = cart.filter(item => item.product_id !== productId);
-  }
-
-  saveCart();
-  updateCartBadge();
-  renderCartDrawer();
-};
-
-// Remove item from cart drawer
-window.removeCartItem = function(productId) {
-  cart = cart.filter(item => item.product_id !== productId);
-  saveCart();
-  updateCartBadge();
-  renderCartDrawer();
-};
-
-function saveCart() {
-  localStorage.setItem('nmb_cart', JSON.stringify(cart));
-}
-
-function updateCartBadge() {
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-  cartCount.textContent = totalItems;
-}
-
-// Render Cart Drawer Content
-function renderCartDrawer() {
-  const giftBox = document.getElementById('gift-progress-box');
-  const giftStatus = document.getElementById('gift-progress-status');
-  const giftFill = document.getElementById('gift-progress-fill');
-
-  if (cart.length === 0) {
-    if (giftBox) giftBox.style.display = 'none';
-    cartItemsContainer.innerHTML = `
-      <div class="empty-cart-message">
-        <span>⚖️</span>
-        <p>Your scale is empty. Add fresh spices from the bazaar grid!</p>
-        <button class="btn btn-secondary close-drawer-action">Explore Bazaar</button>
-      </div>
-    `;
-    cartFooter.style.display = 'none';
-    return;
-  }
-
-  cartFooter.style.display = 'block';
-  let html = '';
-  let subtotal = 0;
-
-  // Fallback emojis inside cart
-  const productEmojis = {
-    'cumin-seeds': '🌾', 'green-cardamom': '🟢', 'black-pepper': '⚫', 'cloves': '🟤',
-    'jodhpuri-mathania-lal-mirch': '🌶️', 'shahi-garam-masala': '🍲', 'royal-haldi': '🟡',
-    'special-chai-masala': '☕', 'marwar-royal-blend': '🍵', 'kesar-elaichi-chai': '🥛',
-    'premium-mamra-almonds': '🌰', 'salted-roasted-cashews': '🥜', 'heritage-ker-sangri-pickle': '🏺',
-    'pure-desi-cow-ghee': '🥛'
-  };
-
-  cart.forEach(item => {
-    const itemTotal = item.price * item.quantity;
-    subtotal += itemTotal;
-    const emoji = productEmojis[item.slug] || '🌶️';
-
-    html += `
-      <div class="cart-item">
-        <span style="font-size: 1.6rem;">${emoji}</span>
-        <div class="cart-item-info">
-          <h4 class="cart-item-name">${item.name}</h4>
-          <span class="cart-item-unit">per ${item.unit}</span>
-          <div class="cart-item-price">₹${itemTotal.toFixed(2)} (${item.quantity} × ₹${item.price.toFixed(2)})</div>
-        </div>
-        
-        <div class="cart-item-controls">
-          <div class="qty-control">
-            <button class="qty-btn" onclick="updateCartQty(${item.product_id}, -1)">-</button>
-            <span class="qty-val" style="width: 25px; text-align: center; font-family: var(--font-mono); font-size: 0.85rem;">${item.quantity}</span>
-            <button class="qty-btn" onclick="updateCartQty(${item.product_id}, 1)">+</button>
-          </div>
-          <button class="remove-item-btn" onclick="removeCartItem(${item.product_id})">remove</button>
-        </div>
-      </div>
-    `;
-  });
-
-  cartItemsContainer.innerHTML = html;
-  cartSubtotal.textContent = `₹${subtotal.toFixed(2)}`;
-
-  if (giftBox && giftStatus && giftFill) {
-    giftBox.style.display = 'block';
-    const target = 500;
-    if (subtotal >= target) {
-      giftStatus.innerHTML = '🎉 <strong>Unlocked!</strong> Free Hand-carved Brass Spoon added!';
-      giftFill.style.width = '100%';
-    } else {
-      const remaining = target - subtotal;
-      giftStatus.innerHTML = `Add <strong>₹${remaining.toFixed(2)}</strong> more for a free Brass Spoon!`;
-      const percentage = (subtotal / target) * 100;
-      giftFill.style.width = `${percentage}%`;
-    }
-  }
-}
-
-// ----------------------------------------------------
-// GPS LOCATION AUTOFILL
-// ----------------------------------------------------
-
-async function handleGPSAutofill() {
-  gpsStatusFeedback.innerHTML = '';
-  gpsStatusFeedback.className = 'gps-status-msg';
-
-  if (!navigator.geolocation) {
-    showGPSFeedback('Browser does not support GPS Geolocation.', 'gps-error');
-    return;
-  }
-
-  // Set loading state on button
-  gpsAutofillBtn.disabled = true;
-  gpsAutofillBtn.textContent = '📍 Locating...';
-  gpsAutofillBtn.classList.add('loading');
-
-  const options = {
-    enableHighAccuracy: true,
-    timeout: 8000,
-    maximumAge: 0
-  };
-
-  navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      
-      showGPSFeedback('Coordinates acquired. Reverse-geocoding address...', 'gps-success');
-
-      try {
-        // Query OpenStreetMap Nominatim Free reverse-geocoder API
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=en`);
-        const data = await response.json();
-        
-        if (data && data.display_name) {
-          custAddressText.value = data.display_name;
-          showGPSFeedback('Address auto-filled successfully!', 'gps-success');
-        } else {
-          // Fallback to coordinates
-          custAddressText.value = `GPS Coordinates: Latitude ${lat.toFixed(5)}, Longitude ${lon.toFixed(5)}`;
-          showGPSFeedback('GPS coordinates loaded. Please adjust to add street name/house number.', 'gps-success');
-        }
-      } catch (err) {
-        console.error('Nominatim reverse lookup failed:', err);
-        custAddressText.value = `Latitude: ${lat.toFixed(5)}, Longitude: ${lon.toFixed(5)}`;
-        showGPSFeedback('GPS coordinates loaded. (Could not fetch postal address - offline).', 'gps-success');
-      } finally {
-        resetGPSBtn();
-      }
-    },
-    (error) => {
-      console.error('Geolocation failed:', error);
-      let errMsg = 'Could not acquire location. Please type manually.';
-      if (error.code === error.PERMISSION_DENIED) {
-        errMsg = 'Location permission denied. Please enable location or type manually.';
-      }
-      showGPSFeedback(errMsg, 'gps-error');
-      resetGPSBtn();
-    },
-    options
-  );
-}
-
-function showGPSFeedback(msg, className) {
-  gpsStatusFeedback.textContent = msg;
-  gpsStatusFeedback.className = `gps-status-msg ${className}`;
-}
-
-function resetGPSBtn() {
-  gpsAutofillBtn.disabled = false;
-  gpsAutofillBtn.textContent = '📍 Get Current Location';
-  gpsAutofillBtn.classList.remove('loading');
-}
-
-// ----------------------------------------------------
-// CHECKOUT & ORDERS
-// ----------------------------------------------------
-
-function openCheckout() {
-  if (cart.length === 0) return;
-  closeCart();
-
-  let html = '';
-  let subtotal = 0;
-  
-  cart.forEach(item => {
-    const itemTotal = item.price * item.quantity;
-    subtotal += itemTotal;
-    html += `
-      <li>
-        <span>${item.name} (${item.quantity} × ${item.unit})</span>
-        <span>₹${itemTotal.toFixed(2)}</span>
-      </li>
-    `;
-  });
-
-  checkoutItemsList.innerHTML = html;
-  checkoutTotalAmount.textContent = `₹${subtotal.toFixed(2)}`;
-  
-  // Clear locator messages and payment states
-  gpsStatusFeedback.innerHTML = '';
-  document.getElementById('selected-payment-method').value = 'COD';
-  
-  // Reset payment tabs active states
-  const paymentTabs = document.querySelectorAll('.payment-tab');
-  const paymentPanels = document.querySelectorAll('.payment-details-panel');
-  paymentTabs.forEach(t => t.classList.remove('active'));
-  paymentPanels.forEach(p => p.classList.remove('active'));
-  
-  // Set COD as default active
-  document.querySelector('.payment-tab[data-method="COD"]').classList.add('active');
-  document.getElementById('panel-COD').classList.add('active');
-  document.getElementById('place-order-btn').textContent = 'Confirm Order (Cash on Delivery)';
-
-  // UPGRADE: Reset packaging selection
-  document.getElementById('selected-packaging').value = 'jute';
-  const packCards = document.querySelectorAll('.packaging-option-card');
-  packCards.forEach(c => c.classList.remove('active'));
-  document.querySelector('.packaging-option-card[data-pack="jute"]').classList.add('active');
-
-  // Bind packaging selection click actions
-  packCards.forEach(card => {
-    card.onclick = (evt) => {
-      packCards.forEach(c => c.classList.remove('active'));
-      const activeCard = evt.currentTarget;
-      activeCard.classList.add('active');
-      const selection = activeCard.getAttribute('data-pack');
-      document.getElementById('selected-packaging').value = selection;
-      
-      // Update grand totals
-      let currentSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      let packCost = selection === 'brass' ? 149 : 0;
-      let grandTotal = currentSubtotal + packCost;
-      checkoutTotalAmount.textContent = `₹${grandTotal.toFixed(2)}`;
-      
-      const qrPriceTotal = document.getElementById('qr-price-total');
-      if (qrPriceTotal) qrPriceTotal.textContent = `₹${grandTotal.toFixed(2)}`;
-    };
-  });
-  
-  // Hide QR scanner simulator
-  const qrSimulator = document.getElementById('qr-simulator');
-  if (qrSimulator) qrSimulator.classList.add('hidden');
-  
-  // Reset card values if any
-  const cardNumInput = document.getElementById('card-num-input');
-  if (cardNumInput) {
-    cardNumInput.value = '';
-    document.getElementById('card-logo-badge').textContent = '💳';
-    document.getElementById('card-name-input').value = '';
-    document.getElementById('card-expiry-input').value = '';
-    document.getElementById('card-cvv-input').value = '';
-  }
-
-  checkoutModal.classList.add('active');
-}
-
-function closeCheckout() {
-  checkoutModal.classList.remove('active');
-}
-
-async function handleCheckoutSubmit(e) {
-  e.preventDefault();
-  
-  const submitBtn = document.getElementById('place-order-btn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Processing Payment & Packing...';
-
-  const method = document.getElementById('selected-payment-method').value;
-  const packaging = document.getElementById('selected-packaging').value;
-
-  const orderData = {
-    customer_name: document.getElementById('cust-name').value,
-    customer_email: document.getElementById('cust-email').value,
-    customer_phone: document.getElementById('cust-phone').value,
-    customer_address: custAddressText.value,
-    payment_method: method,
-    packaging_option: packaging,
-    items: cart.map(item => ({
-      product_id: item.product_id,
-      quantity: item.quantity
-    }))
-  };
-
-  try {
-    const res = await fetch('/api/orders', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(orderData)
-    });
-
-    const result = await res.json();
-    if (result.status === 'success') {
-      const order = result.data;
-      cart = [];
-      saveCart();
-      updateCartBadge();
-
-      closeCheckout();
-      checkoutForm.reset();
-
-      // Show Success Modal
-      successOrderNum.textContent = order.orderNumber;
-      successTotalAmt.textContent = `₹${order.totalAmount.toFixed(2)}`;
-      successModal.classList.add('active');
-
-      // Autofill the tracking form automatically so they can check dispatch immediately!
-      trackOrderNumberInput.value = order.orderNumber;
-    } else {
-      alert(`Bazaar Dispatch Error: ${result.error || 'Failed to process order'}`);
-    }
-  } catch (error) {
-    console.error('Order request failed:', error);
-    alert('Failed to connect to the bazaar dispatch. Please check your network.');
-  } finally {
-    submitBtn.disabled = false;
-    // Restore button text
-    if (method === 'COD') {
-      submitBtn.textContent = 'Confirm Order (Cash on Delivery)';
-    } else if (method === 'UPI') {
-      submitBtn.textContent = 'Pay via UPI & Confirm Order';
-    } else {
-      submitBtn.textContent = 'Pay with Card & Confirm Order';
-    }
-  }
-}
-
-// ----------------------------------------------------
-// ORDER DISPATCH PROGRESS TRACKER
-// ----------------------------------------------------
-
-async function handleOrderTrackingSearch(e) {
-  e.preventDefault();
-  
-  const orderNumber = trackOrderNumberInput.value.trim().toUpperCase();
-  if (!orderNumber) return;
-
-  try {
-    const res = await fetch(`/api/orders/track/${orderNumber}`);
-    const result = await res.json();
-
-    if (result.status === 'success') {
-      const order = result.data;
-      
-      // Populate details card
-      trackDispNumber.textContent = order.order_number;
-      trackDispCustomer.textContent = order.customer_name;
-      trackDispTotal.textContent = `₹${order.total_amount.toFixed(2)}`;
-      trackDispStatusBadge.textContent = order.status;
-
-      // Update Timeline Stepper Classes
-      resetTimelineSteps();
-      
-      let widthPercentage = '0%';
-
-      if (order.status === 'Pending') {
-        stepPending.classList.add('active');
-        widthPercentage = '0%';
-      } else if (order.status === 'Weighed') {
-        stepPending.classList.add('completed');
-        stepWeighed.classList.add('active');
-        widthPercentage = '33%';
-      } else if (order.status === 'Dispatched') {
-        stepPending.classList.add('completed');
-        stepWeighed.classList.add('completed');
-        stepDispatched.classList.add('active');
-        widthPercentage = '66%';
-      } else if (order.status === 'Delivered') {
-        stepPending.classList.add('completed');
-        stepWeighed.classList.add('completed');
-        stepDispatched.classList.add('completed');
-        stepDelivered.classList.add('completed');
-        widthPercentage = '100%';
-      }
-
-      timelineLine.style.width = widthPercentage;
-      
-      // Reveal timeline results
-      trackingResultsCard.classList.remove('hidden');
-      
-      // Scroll smoothly to timeline card
-      trackingResultsCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    } else {
-      alert(`Tracking System: ${result.error || 'Failed to locate order number'}`);
-      trackingResultsCard.classList.add('hidden');
-    }
-  } catch (error) {
-    console.error('Tracking fetch failed:', error);
-    alert('Failed to connect to the tracking server. Please check your connection.');
-  }
-}
-
-function resetTimelineSteps() {
-  const steps = [stepPending, stepWeighed, stepDispatched, stepDelivered];
-  steps.forEach(step => {
-    step.className = 'timeline-step';
-  });
-}
-
-// ----------------------------------------------------
-// OTHER FORM SUBMISSIONS
-// ----------------------------------------------------
-
-async function handleReviewSubmit(e) {
-  e.preventDefault();
-  
-  const name = document.getElementById('review-name').value;
-  const rating = document.getElementById('review-rating').value;
-  const comment = document.getElementById('review-comment').value;
-
-  try {
-    const res = await fetch('/api/reviews', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name, rating, comment })
-    });
-
-    const result = await res.json();
-    if (result.status === 'success') {
-      fetchReviews();
-      reviewForm.reset();
-      
-      // Reset Star Picker
-      const starItems = starPicker.querySelectorAll('.star-picker-item');
-      starItems.forEach(star => star.classList.add('active'));
-      reviewRatingInput.value = 5;
-    } else {
-      alert(`Could not save review: ${result.error}`);
-    }
-  } catch (error) {
-    console.error('Review submit failed:', error);
-  }
-}
-
-async function handleContactSubmit(e) {
-  e.preventDefault();
-
-  const name = document.getElementById('contact-name').value;
-  const email = document.getElementById('contact-email').value;
-  const phone = document.getElementById('contact-phone').value;
-  const message = document.getElementById('contact-message').value;
-  
-  const submitBtn = document.getElementById('contact-submit-btn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Sending Message...';
-
-  try {
-    const res = await fetch('/api/contact', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name, email, phone, message })
-    });
-
-    const result = await res.json();
-    if (result.status === 'success') {
-      alert('Your message has been delivered to Nirmal Masala Bhandar! We will respond within 24 hours.');
-      contactForm.reset();
-    } else {
-      alert(`Could not deliver message: ${result.error}`);
-    }
-  } catch (error) {
-    console.error('Contact submit failed:', error);
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Send Message';
-  }
-}
-
-// ----------------------------------------------------
-// INTERACTIVE RECIPE & SPICE PAIRING TOOL
-// ----------------------------------------------------
-const recipesData = {
-  'mathania-mirch': {
-    title: 'Authentic Rajasthani Laal Maas',
-    tag: '🌶️ Hot & Smoky',
-    prep: '20 mins',
-    cook: '45 mins',
-    serves: 4,
-    secret: 'Soak the Mathania chilis in warm water for 15 minutes before grinding into a paste to unlock the royal crimson color without burning heat.',
-    pairings: ['Mutton / Lamb', 'Desi Ghee', 'Bajra Roti', 'Shahi Garam Masala'],
-    spices: [5, 14, 6] // Product IDs: Mathania Chili (5), Desi Ghee (14), Garam Masala (6)
-  },
-  'kesar-elaichi': {
-    title: 'Kotwali Bazaar Kesar Kheer',
-    tag: '🥛 Sweet & Royal',
-    prep: '15 mins',
-    cook: '30 mins',
-    serves: 6,
-    secret: 'Toast the saffron strands lightly on a warm spoon lid before adding to boiling milk to release the bright gold color and intense Marwari flavor.',
-    pairings: ['Basmati Rice', 'Green Cardamom', 'Desi Ghee', 'Almonds & Cashews'],
-    spices: [10, 2, 14, 11, 12]
-  },
-  'shahi-garam-masala': {
-    title: 'Royal Jodhpuri Govind Gatta Curry',
-    tag: '🍲 Aromatic & Savory',
-    prep: '25 mins',
-    cook: '35 mins',
-    serves: 4,
-    secret: 'Add the Shahi Garam Masala in the last 3 minutes of boiling the yogurt gravy so the volatile spice oils do not evaporate, preserving the rich fragrance.',
-    pairings: ['Besan (Gram Flour)', 'Yogurt Gravy', 'Pure Ghee', 'Cumin Seeds'],
-    spices: [6, 14, 1]
-  },
-  'green-cardamom': {
-    title: 'Munnar Elaichi Chai Scones',
-    tag: '🟢 Fragrant & Sweet',
-    prep: '15 mins',
-    cook: '20 mins',
-    serves: 8,
-    secret: 'Crush the cardamom pods immediately before baking; exposing cardamom seeds to air too early dilutes their sweet camphor oils.',
-    pairings: ['Wheat Flour', 'Assam Tea', 'Cow Ghee', 'Sugar'],
-    spices: [2, 9, 14]
-  },
-  'cow-ghee': {
-    title: 'Heritage Marwari Churma Ladoo',
-    tag: '🏺 Rich & Decadent',
-    prep: '20 mins',
-    cook: '15 mins',
-    serves: 10,
-    secret: 'Churn the wheat flour crumbs inside warm A2 ghee while it is slightly hot. This allows the granules to absorb the ghee completely for a melt-in-your-mouth bite.',
-    pairings: ['Wheat Flour', 'Jaggery / Sugar', 'Cardamom Seeds', 'Cashews'],
-    spices: [14, 2, 12]
-  }
-};
-
-function updateRecipeDisplay(spiceKey) {
-  const recipe = recipesData[spiceKey];
-  if (!recipe) return;
-
-  const displayCard = document.getElementById('recipe-card-display');
-  if (!displayCard) return;
-
-  displayCard.querySelector('.recipe-tag-badge').textContent = recipe.tag;
-  displayCard.querySelector('.recipe-title').textContent = recipe.title;
-  displayCard.querySelector('.meta-flex').innerHTML = `
-    <span>⏱️ Prep: ${recipe.prep}</span>
-    <span>🔥 Cook: ${recipe.cook}</span>
-    <span>👨‍👩‍👧‍👦 Serves: ${recipe.serves}</span>
-  `;
-  displayCard.querySelector('.recipe-secret-text').textContent = recipe.secret;
-
-  const badgesList = document.getElementById('recipe-pairing-badges');
-  let badgesHtml = '';
-  recipe.pairings.forEach(p => {
-    badgesHtml += `<span class="pairing-badge">${p}</span>`;
-  });
-  badgesList.innerHTML = badgesHtml;
-
-  const ingredientsList = displayCard.querySelector('.recipe-ingredients-list');
-  let ingredientsHtml = '';
-  
-  recipe.spices.forEach(pid => {
-    // Attempt to lookup in seeded products list
-    const prod = products.find(p => p.id === pid);
-    if (prod) {
-      ingredientsHtml += `<li>Add <strong>${prod.name}</strong> (${prod.unit})</li>`;
-    }
-  });
-
-  if (spiceKey === 'mathania-mirch') {
-    ingredientsHtml += `<li>500g Lamb or Goat shoulder pieces</li>`;
-    ingredientsHtml += `<li>Sliced onions & ginger paste</li>`;
-  } else if (spiceKey === 'kesar-elaichi') {
-    ingredientsHtml += `<li>1 Liter Full Cream Milk</li>`;
-    ingredientsHtml += `<li>1/2 Cup Basmati Rice</li>`;
-  } else {
-    ingredientsHtml += `<li>Fresh water & salt as required</li>`;
-  }
-  ingredientsList.innerHTML = ingredientsHtml;
-
-  const addSpicesBtn = document.getElementById('add-recipe-spices-btn');
-  addSpicesBtn.onclick = () => {
-    recipe.spices.forEach(pid => {
-      addToCart(pid, 1);
-    });
-    addSpicesBtn.textContent = '✅ Spices Added to Cart!';
+    // Delay incoming messages by simulated latency
     setTimeout(() => {
-      addSpicesBtn.textContent = '🛒 Add Required Spices to Bag';
-    }, 2000);
+      if (!replica.online || replica.syncing) return;
+      handleStreamMessage(replica, message);
+    }, latency);
+  };
+
+  sse.onerror = (err) => {
+    console.error(`Site ${replica.siteId} SSE connection closed:`, err);
+    sse.close();
   };
 }
 
-// Self-initialize Recipe Pairing Widget
-document.addEventListener('DOMContentLoaded', () => {
-  const recipeSelect = document.getElementById('recipe-spice-select');
-  if (recipeSelect) {
-    recipeSelect.addEventListener('change', (e) => {
-      updateRecipeDisplay(e.target.value);
-    });
+// Handle real-time EventSource messages
+function handleStreamMessage(replica, message) {
+  if (message.type === 'op') {
+    const op = message.op;
+    if (replica.appliedSeqs.has(op.seq)) return;
+
+    applyOp(replica, op);
+    addSyncLogEntry(op);
+    renderReplica(replica);
+    checkSystemConvergence();
+  } else if (message.type === 'cursor') {
+    replica.remoteCursors[message.siteId] = message.posId;
+    renderReplica(replica);
+  } else if (message.type === 'reset') {
+    console.log(`Site ${replica.siteId} resetting local state.`);
+    resetLocalReplicaState(replica);
+    catchUpReplica(replica);
+  }
+}
+
+// Apply an op to the replica
+function applyOp(replica, op) {
+  if (replica.appliedSeqs.has(op.seq)) return;
+
+  if (op.type === 'insert') {
+    // Clone node to avoid reference leaks
+    const nodeClone = JSON.parse(JSON.stringify(op.node));
+    integrateNode(replica, nodeClone);
+    
+    // Ensure replica local clock is ahead of anything it integrates
+    if (op.node.id.site === replica.siteId) {
+      replica.clock = Math.max(replica.clock, op.node.id.clock);
+    }
+  } else if (op.type === 'delete') {
+    applyDelete(replica, op.targetId);
+  }
+
+  replica.appliedSeqs.add(op.seq);
+  replica.lastSeenSeq = Math.max(replica.lastSeenSeq, op.seq);
+}
+
+// Catch-up operation polling
+async function catchUpReplica(replica) {
+  try {
+    const response = await fetch(`/api/crdt/ops?since=${replica.lastSeenSeq}`);
+    const result = await response.json();
+    if (result.status === 'success') {
+      const ops = result.data;
+      for (const op of ops) {
+        applyOp(replica, op);
+        addSyncLogEntry(op);
+      }
+      renderReplica(replica);
+      checkSystemConvergence();
+    }
+  } catch (err) {
+    console.error(`Failed catching up Site ${replica.siteId}:`, err);
+  }
+}
+
+// Sends an operation to the server
+function sendOpToServer(replica, op) {
+  const latency = getSimulatedLatency();
+
+  // Simulated latency delay
+  setTimeout(async () => {
+    try {
+      const response = await fetch('/api/crdt/ops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(op)
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        const returnedOp = result.data;
+        replica.appliedSeqs.add(returnedOp.seq);
+        replica.lastSeenSeq = Math.max(replica.lastSeenSeq, returnedOp.seq);
+        addSyncLogEntry(returnedOp);
+        checkSystemConvergence();
+      }
+    } catch (err) {
+      console.error(`Send op failed for Site ${replica.siteId}:`, err);
+    }
+  }, latency);
+}
+
+// Sends cursor positions to the server
+function sendCursorToServer(replica) {
+  if (!replica.online || replica.syncing) return;
+
+  const latency = getSimulatedLatency();
+  const body = {
+    siteId: replica.siteId,
+    posId: replica.caretPosId
+  };
+
+  setTimeout(async () => {
+    if (!replica.online) return;
+    try {
+      await fetch('/api/crdt/cursor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    } catch (err) {
+      // ignore
+    }
+  }, latency);
+}
+
+// Global Sync Log Renderer
+function addSyncLogEntry(op) {
+  if (loggedSeqs.has(op.seq)) return;
+  loggedSeqs.add(op.seq);
+
+  const logEl = document.getElementById('sync-log-entries');
+  if (!logEl) return;
+
+  const entryEl = document.createElement('div');
+  entryEl.className = `log-entry log-${op.sender}`;
+
+  let details = '';
+  if (op.type === 'insert') {
+    const originStr = op.node.origin ? `${op.node.origin.site}:${op.node.origin.clock}` : 'START';
+    const charDisplay = op.node.char === '\n' ? '↵ (newline)' : `'${op.node.char}'`;
+    details = `INSERT char ${charDisplay} | Node ID: ${op.node.id.site}:${op.node.id.clock} | Origin: ${originStr}`;
+  } else if (op.type === 'delete') {
+    details = `DELETE Node ID: ${op.targetId.site}:${op.targetId.clock}`;
+  }
+
+  entryEl.textContent = `[Seq: ${op.seq}] [User: ${op.sender}] -> ${details}`;
+  
+  // Apply current filter visibility immediately
+  if (currentLogFilter !== 'all' && op.sender !== currentLogFilter) {
+    entryEl.style.display = 'none';
+  }
+
+  logEl.appendChild(entryEl);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// Refilters the sync log DOM nodes
+function applyLogFiltering() {
+  const logEntries = document.querySelectorAll('.log-entry');
+  logEntries.forEach(entry => {
+    if (currentLogFilter === 'all') {
+      entry.style.display = 'block';
+    } else {
+      if (entry.classList.contains(`log-${currentLogFilter}`)) {
+        entry.style.display = 'block';
+      } else {
+        entry.style.display = 'none';
+      }
+    }
+  });
+}
+
+// Updates the decorative status connection ribbons
+function updateReplicaRibbon(replica) {
+  const ribbon = document.getElementById(`ribbon-${replica.siteId}`);
+  if (!ribbon) return;
+
+  const textEl = ribbon.querySelector('.conn-text');
+
+  if (replica.syncing) {
+    ribbon.className = 'connection-status-ribbon syncing';
+    textEl.textContent = 'Synchronizing operations ledger...';
+  } else if (replica.online) {
+    ribbon.className = 'connection-status-ribbon online';
+    textEl.textContent = 'Active connection to global log (SSE)';
+  } else {
+    ribbon.className = 'connection-status-ribbon offline';
+    textEl.textContent = 'Disconnected from global log (Local Mode)';
+  }
+}
+
+// Toggles Online/Offline states
+async function toggleReplicaStatus(replica) {
+  const btn = document.getElementById(`toggle-${replica.siteId}`);
+  const card = document.querySelector(`.site-${replica.siteId}`);
+
+  if (replica.online) {
+    // Go offline
+    replica.online = false;
+    if (replica.sseSource) {
+      replica.sseSource.close();
+      replica.sseSource = null;
+    }
+    
+    // Clear remote cursors when user leaves
+    replica.remoteCursors = {};
+
+    btn.textContent = 'OFFLINE';
+    btn.className = 'status-pill offline';
+    card.classList.add('offline-replica');
+    
+    updateReplicaRibbon(replica);
+    renderReplica(replica);
+    checkSystemConvergence();
+  } else {
+    // Reconnect - visual syncing transition
+    replica.syncing = true;
+    btn.textContent = 'SYNCING...';
+    btn.className = 'status-pill syncing';
+    updateReplicaRibbon(replica);
+    
+    // Simulate catch-up transit delay
+    setTimeout(async () => {
+      // Catch up missed edits
+      await catchUpReplica(replica);
+
+      // Reconnect EventSource stream
+      connectReplicaStream(replica);
+
+      replica.syncing = false;
+      replica.online = true;
+      btn.textContent = 'ONLINE';
+      btn.className = 'status-pill online';
+      card.classList.remove('offline-replica');
+      
+      updateReplicaRibbon(replica);
+
+      // Flush local writes accumulated while offline
+      while (replica.outboundQueue.length > 0) {
+        const op = replica.outboundQueue.shift();
+        sendOpToServer(replica, op);
+      }
+
+      sendCursorToServer(replica);
+      renderReplica(replica);
+      checkSystemConvergence();
+    }, 600);
   }
   
-  // Call initially to render Mathania Chili recipe
-  setTimeout(() => {
-    updateRecipeDisplay('mathania-mirch');
-  }, 1000);
-});
+  // Re-broadcast status updates
+  renderPresence();
+}
+
+// Helper to compute plain-text representation
+function getReplicaText(replica) {
+  return replica.nodes
+    .filter(node => !node.deleted)
+    .map(node => node.char)
+    .join('');
+}
+
+// Compares plain-text contents of online replicas
+function checkSystemConvergence() {
+  const badge = document.getElementById('convergence-badge');
+  const onlineReplicas = allReplicas.filter(r => r.online && !r.syncing);
+
+  if (onlineReplicas.length <= 1) {
+    badge.innerHTML = '<span class="badge-dot"></span><span class="badge-text">✓ CONVERGED</span>';
+    badge.className = 'badge badge-converged';
+    return;
+  }
+
+  const firstText = getReplicaText(onlineReplicas[0]);
+  let converged = true;
+  for (let i = 1; i < onlineReplicas.length; i++) {
+    if (getReplicaText(onlineReplicas[i]) !== firstText) {
+      converged = false;
+      break;
+    }
+  }
+
+  if (converged) {
+    badge.innerHTML = '<span class="badge-dot"></span><span class="badge-text">✓ CONVERGED</span>';
+    badge.className = 'badge badge-converged';
+  } else {
+    badge.innerHTML = '<span class="badge-dot"></span><span class="badge-text">⧗ DIVERGING</span>';
+    badge.className = 'badge badge-diverging';
+  }
+}
+
+// Renders the presence status rows in all replicas
+function renderPresence() {
+  allReplicas.forEach(r => {
+    allReplicas.forEach(other => {
+      if (r.siteId === other.siteId) return;
+      const el = document.getElementById(`presence-${r.siteId}-${other.siteId}`);
+      if (!el) return;
+
+      const statusSpan = el.querySelector('.status-text');
+      const dot = el.querySelector('.status-dot');
+
+      if (other.syncing) {
+        statusSpan.textContent = 'SYNCING...';
+        dot.style.opacity = '0.6';
+      } else if (other.online) {
+        statusSpan.textContent = 'ONLINE';
+        dot.style.opacity = '1';
+      } else {
+        statusSpan.textContent = 'OFFLINE';
+        dot.style.opacity = '0.2';
+      }
+    });
+  });
+}
+
+// ==========================================================================
+// Keyboard Input & Text Editing Model
+// ==========================================================================
+
+function handleInsert(replica, char) {
+  replica.clock++;
+  const nodeId = { site: replica.siteId, clock: replica.clock };
+  const origin = replica.caretPosId;
+  const node = {
+    id: nodeId,
+    char,
+    deleted: false,
+    origin
+  };
+
+  integrateNode(replica, node);
+  replica.caretPosId = nodeId; // Move caret past new character
+
+  renderReplica(replica);
+
+  const op = {
+    type: 'insert',
+    sender: replica.siteId,
+    node
+  };
+
+  if (replica.online) {
+    sendOpToServer(replica, op);
+  } else {
+    // Offline buffer
+    replica.outboundQueue.push(op);
+  }
+
+  sendCursorToServer(replica);
+}
+
+function handleBackspace(replica) {
+  if (replica.caretPosId === null) return;
+
+  const targetId = replica.caretPosId;
+  // Move caret left before deleting node
+  const prevVisibleId = getVisiblePreviousNodeIdById(replica, targetId);
+
+  applyDelete(replica, targetId);
+  replica.caretPosId = prevVisibleId;
+
+  renderReplica(replica);
+
+  const op = {
+    type: 'delete',
+    sender: replica.siteId,
+    targetId
+  };
+
+  if (replica.online) {
+    sendOpToServer(replica, op);
+  } else {
+    // Offline buffer
+    replica.outboundQueue.push(op);
+  }
+
+  sendCursorToServer(replica);
+}
+
+function moveCaretHorizontal(replica, direction) {
+  if (direction === 'left') {
+    if (replica.caretPosId === null) return;
+    replica.caretPosId = getVisiblePreviousNodeIdById(replica, replica.caretPosId);
+  } else if (direction === 'right') {
+    if (replica.caretPosId === null) {
+      // Go to first visible node
+      const firstVisible = replica.nodes.find(n => !n.deleted);
+      if (firstVisible) {
+        replica.caretPosId = firstVisible.id;
+      }
+    } else {
+      const idx = findNodeIndex(replica.nodes, replica.caretPosId);
+      if (idx !== -1) {
+        // Find next visible node
+        let nextVisibleId = replica.caretPosId;
+        for (let i = idx + 1; i < replica.nodes.length; i++) {
+          if (!replica.nodes[i].deleted) {
+            nextVisibleId = replica.nodes[i].id;
+            break;
+          }
+        }
+        replica.caretPosId = nextVisibleId;
+      }
+    }
+  }
+
+  sendCursorToServer(replica);
+  renderReplica(replica);
+}
+
+function moveCaretVertically(replica, direction) {
+  const editorEl = document.getElementById(`editor-${replica.siteId}`);
+  const caretEl = editorEl.querySelector('.local-caret');
+  if (!caretEl) return;
+
+  const caretRect = caretEl.getBoundingClientRect();
+  const caretX = (caretRect.left + caretRect.right) / 2;
+  const caretY = (caretRect.top + caretRect.bottom) / 2;
+
+  const spans = Array.from(editorEl.querySelectorAll('.char-span'));
+  if (spans.length === 0) return;
+
+  const charHeight = spans[0].getBoundingClientRect().height || 18;
+  const targetY = direction === 'up' ? caretY - charHeight : caretY + charHeight;
+
+  let bestSpan = null;
+  let minDistance = Infinity;
+
+  for (const span of spans) {
+    // Skip checking collision with tombstones for vertical navigation if they are hidden
+    const isTombstone = span.classList.contains('tombstone');
+    if (isTombstone && !showTombstones) continue;
+
+    const rect = span.getBoundingClientRect();
+    const spanY = (rect.top + rect.bottom) / 2;
+    const spanX = (rect.left + rect.right) / 2;
+
+    const vDist = Math.abs(spanY - targetY);
+    if (vDist < charHeight * 0.75) {
+      const hDist = Math.abs(spanX - caretX);
+      if (hDist < minDistance) {
+        minDistance = hDist;
+        bestSpan = span;
+      }
+    }
+  }
+
+  if (bestSpan) {
+    const nodeObj = JSON.parse(bestSpan.dataset.node);
+    const rect = bestSpan.getBoundingClientRect();
+    if (caretX < (rect.left + rect.right) / 2) {
+      replica.caretPosId = getVisiblePreviousNodeId(replica, nodeObj);
+    } else {
+      replica.caretPosId = nodeObj.id;
+    }
+  } else {
+    // Fallback if no lines above/below
+    if (direction === 'up') {
+      replica.caretPosId = null;
+    } else {
+      const visibleNodes = replica.nodes.filter(n => !n.deleted);
+      if (visibleNodes.length > 0) {
+        replica.caretPosId = visibleNodes[visibleNodes.length - 1].id;
+      }
+    }
+  }
+
+  sendCursorToServer(replica);
+  renderReplica(replica);
+}
+
+// ==========================================================================
+// DOM Renderer
+// ==========================================================================
+
+function renderReplica(replica) {
+  const editorEl = document.getElementById(`editor-${replica.siteId}`);
+  if (!editorEl) return;
+
+  // Track cursor position node mappings
+  const caretsByAttachment = {};
+
+  // Add local caret if focused
+  const isFocused = document.activeElement === editorEl;
+  if (isFocused) {
+    const localAttachedId = getCaretAttachment(replica, replica.caretPosId);
+    const localKey = nodeIdKey(localAttachedId);
+    if (!caretsByAttachment[localKey]) caretsByAttachment[localKey] = [];
+    caretsByAttachment[localKey].push({
+      type: 'local',
+      siteId: replica.siteId,
+      name: replica.name,
+      color: replica.color
+    });
+  }
+
+  // Add remote carets (only from online & non-syncing users)
+  for (const other of allReplicas) {
+    if (other.siteId !== replica.siteId && other.online && !other.syncing) {
+      const rawPosId = replica.remoteCursors[other.siteId];
+      const posId = rawPosId !== undefined ? rawPosId : null;
+      const attachedId = getCaretAttachment(replica, posId);
+      const remoteKey = nodeIdKey(attachedId);
+      if (!caretsByAttachment[remoteKey]) caretsByAttachment[remoteKey] = [];
+      caretsByAttachment[remoteKey].push({
+        type: 'remote',
+        siteId: other.siteId,
+        name: other.name,
+        color: other.color
+      });
+    }
+  }
+
+  // Helper to render carets
+  function makeCaretElement(caret) {
+    if (caret.type === 'local') {
+      const caretSpan = document.createElement('span');
+      caretSpan.className = 'local-caret';
+      return caretSpan;
+    } else {
+      const caretSpan = document.createElement('span');
+      caretSpan.className = `remote-caret border-${caret.siteId}`;
+      caretSpan.style.borderColor = caret.color;
+      
+      const tag = document.createElement('span');
+      tag.className = `remote-caret-tag bg-${caret.siteId}`;
+      tag.style.backgroundColor = caret.color;
+      tag.textContent = caret.name.toUpperCase();
+      
+      caretSpan.appendChild(tag);
+      return caretSpan;
+    }
+  }
+
+  // Clear Editor DOM content
+  editorEl.innerHTML = '';
+
+  // Render starting carets
+  if (caretsByAttachment['start']) {
+    caretsByAttachment['start'].forEach(caret => {
+      editorEl.appendChild(makeCaretElement(caret));
+    });
+  }
+
+  // Render character by character
+  replica.nodes.forEach(node => {
+    if (node.deleted && !showTombstones) return;
+
+    const charSpan = document.createElement('span');
+    charSpan.className = 'char-span';
+    
+    if (node.deleted) {
+      charSpan.className += ' tombstone';
+    }
+
+    charSpan.dataset.meta = `ID: ${node.id.site}:${node.id.clock} | Origin: ${node.origin ? node.origin.site + ':' + node.origin.clock : 'START'}${node.deleted ? ' | (TOMBSTONE)' : ''}`;
+    charSpan.dataset.node = JSON.stringify(node);
+
+    if (node.char === '\n') {
+      charSpan.className += ' char-span-newline';
+      charSpan.textContent = '\n';
+    } else {
+      charSpan.textContent = node.char;
+    }
+
+    editorEl.appendChild(charSpan);
+
+    // Render carets attached to this node
+    const key = nodeIdKey(node.id);
+    if (caretsByAttachment[key]) {
+      caretsByAttachment[key].forEach(caret => {
+        editorEl.appendChild(makeCaretElement(caret));
+      });
+    }
+  });
+
+  // Render footer metrics
+  const charCountVal = replica.nodes.filter(n => !n.deleted).length;
+  document.getElementById(`char-count-${replica.siteId}`).textContent = charCountVal;
+  document.getElementById(`ops-seen-${replica.siteId}`).textContent = replica.appliedSeqs.size;
+}
+
+// ==========================================================================
+// Setup Page Event Listeners
+// ==========================================================================
+
+function handleKeyDown(e, replica) {
+  if (replica.syncing) {
+    e.preventDefault();
+    return;
+  }
+
+  const key = e.key;
+
+  if (e.ctrlKey || e.metaKey || e.altKey) {
+    return;
+  }
+
+  if (key === 'Backspace') {
+    e.preventDefault();
+    handleBackspace(replica);
+  } else if (key === 'Enter') {
+    e.preventDefault();
+    handleInsert(replica, '\n');
+  } else if (key === 'ArrowLeft') {
+    e.preventDefault();
+    moveCaretHorizontal(replica, 'left');
+  } else if (key === 'ArrowRight') {
+    e.preventDefault();
+    moveCaretHorizontal(replica, 'right');
+  } else if (key === 'ArrowUp') {
+    e.preventDefault();
+    moveCaretVertically(replica, 'up');
+  } else if (key === 'ArrowDown') {
+    e.preventDefault();
+    moveCaretVertically(replica, 'down');
+  } else if (key.length === 1) {
+    e.preventDefault();
+    handleInsert(replica, key);
+  }
+}
+
+function initApp() {
+  allReplicas.forEach(replica => {
+    const editorEl = document.getElementById(`editor-${replica.siteId}`);
+    
+    // Connect EventListeners
+    editorEl.addEventListener('keydown', (e) => handleKeyDown(e, replica));
+    editorEl.addEventListener('focus', () => {
+      renderReplica(replica);
+      sendCursorToServer(replica);
+    });
+    editorEl.addEventListener('blur', () => {
+      setTimeout(() => {
+        renderReplica(replica);
+      }, 150);
+    });
+
+    // Handle clicks inside editor for cursor placement
+    editorEl.addEventListener('click', (e) => {
+      const charSpan = e.target.closest('.char-span');
+      if (charSpan) {
+        const nodeObj = JSON.parse(charSpan.dataset.node);
+        const rect = charSpan.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        
+        if (clickX < rect.width / 2) {
+          replica.caretPosId = getVisiblePreviousNodeId(replica, nodeObj);
+        } else {
+          replica.caretPosId = nodeObj.id;
+        }
+      } else {
+        const visibleNodes = replica.nodes.filter(n => !n.deleted);
+        if (visibleNodes.length > 0) {
+          replica.caretPosId = visibleNodes[visibleNodes.length - 1].id;
+        } else {
+          replica.caretPosId = null;
+        }
+      }
+      sendCursorToServer(replica);
+      renderReplica(replica);
+    });
+
+    // Toggle Online/Offline buttons
+    document.getElementById(`toggle-${replica.siteId}`).addEventListener('click', () => {
+      toggleReplicaStatus(replica);
+    });
+
+    // Initial SSE Stream connection
+    connectReplicaStream(replica);
+    
+    // Initial fetch of operations (Genesis document)
+    catchUpReplica(replica);
+  });
+
+  // Global reset button
+  document.getElementById('reset-btn').addEventListener('click', async () => {
+    try {
+      await fetch('/api/crdt/reset', { method: 'POST' });
+    } catch (err) {
+      console.error('Reset database failed:', err);
+    }
+  });
+
+  // Diagnostics Button
+  document.getElementById('run-tests-btn').addEventListener('click', () => {
+    runDiagnostics();
+  });
+  
+  document.getElementById('close-diag-btn').addEventListener('click', () => {
+    document.getElementById('diagnostic-pane').classList.add('hidden');
+  });
+
+  // Tombstone toggle switch
+  const tombstoneToggle = document.getElementById('tombstone-toggle');
+  tombstoneToggle.addEventListener('change', () => {
+    showTombstones = tombstoneToggle.checked;
+    allReplicas.forEach(renderReplica);
+  });
+
+  // Monospace log filter buttons
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentLogFilter = btn.dataset.filter;
+      applyLogFiltering();
+    });
+  });
+
+  renderPresence();
+  allReplicas.forEach(updateReplicaRibbon);
+}
+
+// Initialize on page load
+window.addEventListener('DOMContentLoaded', initApp);
+
+// ==========================================================================
+// Systems Verification Diagnostic Test Suite
+// ==========================================================================
+
+function runDiagnostics() {
+  const diagPane = document.getElementById('diagnostic-pane');
+  const logEl = document.getElementById('test-results-log');
+  diagPane.classList.remove('hidden');
+  logEl.innerHTML = '';
+  
+  function log(msg, type = 'info') {
+    const line = document.createElement('div');
+    if (type === 'pass') {
+      line.style.color = '#baff00';
+      line.style.fontWeight = 'bold';
+      line.textContent = `[PASS] ${msg}`;
+    } else if (type === 'fail') {
+      line.style.color = '#ff6b4a';
+      line.style.fontWeight = 'bold';
+      line.textContent = `[FAIL] ${msg}`;
+    } else {
+      line.style.color = '#94a3b8';
+      line.textContent = `[INFO] ${msg}`;
+    }
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  log("Starting RGA CRDT verification suite...\n");
+  
+  // Test 1: Sibling concurrent inserts (deterministic commutative order)
+  try {
+    log("Test 1: Sibling concurrent inserts tie-breaking");
+    const r1 = createReplicaObject('X', 'TestX', '#fff');
+    const r2 = createReplicaObject('Y', 'TestY', '#fff');
+    
+    const nodeX = {
+      id: { site: 'X', clock: 1 },
+      char: 'x',
+      deleted: false,
+      origin: null
+    };
+    const nodeY = {
+      id: { site: 'Y', clock: 1 },
+      char: 'y',
+      deleted: false,
+      origin: null
+    };
+    
+    integrateNode(r1, nodeX);
+    integrateNode(r1, nodeY);
+    
+    integrateNode(r2, nodeY);
+    integrateNode(r2, nodeX);
+    
+    const text1 = r1.nodes.map(n => n.char).join('');
+    const text2 = r2.nodes.map(n => n.char).join('');
+    
+    // Site Y > Site X, so Y wins left slot -> 'yx'
+    if (text1 === text2 && text1 === 'yx') {
+      log(`Replica X: "${text1}" | Replica Y: "${text2}"`, 'info');
+      log("Tie-breaking converges and matches expected order 'yx'.", 'pass');
+    } else {
+      log(`Convergence failure. Replica X: "${text1}" | Replica Y: "${text2}"`, 'fail');
+    }
+  } catch (err) {
+    log(`Test 1 threw error: ${err.message}`, 'fail');
+  }
+
+  // Test 2: Out-of-order delete (delete arriving before insert)
+  try {
+    log("\nTest 2: Out-of-order delete retroactive tombstoning");
+    const r = createReplicaObject('Z', 'TestZ', '#fff');
+    const targetId = { site: 'A', clock: 100 };
+    
+    applyDelete(r, targetId);
+    log(`Applied delete for A:100 before insert. pendingDeletes contains A:100? ${r.pendingDeletes.has('A:100')}`, 'info');
+    
+    const insertNode = {
+      id: targetId,
+      char: 'a',
+      deleted: false,
+      origin: null
+    };
+    integrateNode(r, insertNode);
+    
+    if (r.nodes.length === 1 && r.nodes[0].deleted) {
+      log("Insert successfully integrated as tombstone retroactively.", 'pass');
+    } else {
+      log(`Failed retroactive tombstone. nodes length=${r.nodes.length}, deleted=${r.nodes[0]?.deleted}`, 'fail');
+    }
+  } catch (err) {
+    log(`Test 2 threw error: ${err.message}`, 'fail');
+  }
+
+  // Test 3: Complex concurrent edit merging (Offline conflict simulation)
+  try {
+    log("\nTest 3: Offline conflict simulation and catch-up");
+    const rAlice = createReplicaObject('A', 'Alice', '#fff');
+    const rBob = createReplicaObject('B', 'Bob', '#fff');
+    
+    const genesisNode = { id: { site: 'S', clock: 1 }, char: 'H', deleted: false, origin: null };
+    integrateNode(rAlice, genesisNode);
+    integrateNode(rBob, genesisNode);
+    
+    const nodeAlice = { id: { site: 'A', clock: 1 }, char: 'A', deleted: false, origin: { site: 'S', clock: 1 } };
+    integrateNode(rAlice, nodeAlice);
+    
+    const nodeBob = { id: { site: 'B', clock: 1 }, char: 'B', deleted: false, origin: { site: 'S', clock: 1 } };
+    integrateNode(rBob, nodeBob);
+    
+    integrateNode(rAlice, nodeBob);
+    integrateNode(rBob, nodeAlice);
+    
+    const textAlice = rAlice.nodes.filter(n => !n.deleted).map(n => n.char).join('');
+    const textBob = rBob.nodes.filter(n => !n.deleted).map(n => n.char).join('');
+    
+    if (textAlice === textBob && textAlice === 'HBA') {
+      log(`Alice merged text: "${textAlice}"`, 'info');
+      log(`Bob merged text: "${textBob}"`, 'info');
+      log("Both replicas converged to the same text 'HBA' successfully.", 'pass');
+    } else {
+      log(`Convergence mismatch. Alice: "${textAlice}" | Bob: "${textBob}"`, 'fail');
+    }
+  } catch (err) {
+    log(`Test 3 threw error: ${err.message}`, 'fail');
+  }
+}
