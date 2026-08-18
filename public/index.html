@@ -3,291 +3,464 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CRDT Sequence RGA Collaborative Telemetry</title>
-  <!-- Google Fonts for premium typography -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <title>AI-Driven Learning Support System | Content Curation & Smart Learning</title>
+  <meta name="description" content="An AI-Driven Learning Support System that Curates Content, offers Smart Learning with AI Quizzes, Personalized Study Schedules, and a Voice-Activated AI Study Buddy.">
   <link rel="stylesheet" href="styles.css">
+  <!-- Google Identity Services SDK -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
-  <div class="dashboard">
-    
-    <!-- Premium Header -->
-    <header class="app-header">
-      <div class="header-main">
-        <div class="logo-group">
-          <!-- Server icon SVG -->
-          <svg class="icon-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-          <div>
-            <h1>RGA-CRDT Observability Dashboard</h1>
-            <p class="subtitle">Distributed Systems Experiment: Sequence Conflict-Free Replicated Data Type (RGA)</p>
-          </div>
-        </div>
-        
-        <div class="system-status">
-          <span class="status-label">Global State:</span>
-          <div id="convergence-badge" class="badge badge-converged">
-            <span class="badge-dot"></span>
-            <span class="badge-text">✓ CONVERGED</span>
-          </div>
-        </div>
-      </div>
-    </header>
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <a href="#" class="brand" onclick="switchView('home-view')">
+      <span>LearnAI</span>
+      <span class="brand-badge">Learning Support System</span>
+    </a>
 
-    <!-- Visual Interactive Explainer & Walkthrough -->
-    <section class="walkthrough-section">
-      <header class="section-title-wrapper">
-        <svg class="icon-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        <h3>How to Test & Observe the Merge Mechanics</h3>
-      </header>
-      <div class="walkthrough-steps">
-        <div class="step-card">
-          <div class="step-num">01</div>
-          <h4>Simulate Real-time Sync</h4>
-          <p>Type characters concurrently in **Alice** and **Bob** panes. Notice how keys sync instantly, and caret positions follow character IDs rather than numeric indexes.</p>
-        </div>
-        <div class="step-card">
-          <div class="step-num">02</div>
-          <h4>Offline Concurrent Edits</h4>
-          <p>Toggle **Charlie** to <span class="pill-inline offline">OFFLINE</span>. Type `CharlieText` inside Charlie's editor. Concurrently type `OnlineText` in Alice. Replicas are now diverged.</p>
-        </div>
-        <div class="step-card">
-          <div class="step-num">03</div>
-          <h4>Reconnect & Auto-Merge</h4>
-          <p>Toggle Charlie back to <span class="pill-inline online">ONLINE</span>. Charlie will show <span class="pill-inline syncing">SYNCING...</span> while catching up. The RGA merges concurrent histories with deterministic tie-breaking.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- System Controls -->
-    <section class="control-panel">
-      <div class="control-left">
-        <!-- Latency Slider -->
-        <div class="slider-group">
-          <div class="slider-label-row">
-            <span>Simulated Network Latency</span>
-            <span id="latency-val" class="slider-val">300ms</span>
-          </div>
-          <input type="range" id="latency-slider" min="0" max="1500" value="300" step="50" class="premium-slider">
-          <div class="slider-ticks">
-            <span>0ms (LAN)</span>
-            <span>750ms</span>
-            <span>1500ms (Satellite)</span>
-          </div>
-        </div>
-
-        <!-- Tombstones Toggle -->
-        <div class="toggle-group">
-          <span class="toggle-label">Pedagogical Debug:</span>
-          <label class="switch-container">
-            <input type="checkbox" id="tombstone-toggle">
-            <span class="switch-slider"></span>
-          </label>
-          <span class="toggle-desc">Show Deleted Tombstones <span class="badge-new">RGA Core</span></span>
-        </div>
-      </div>
-
-      <div class="control-right">
-        <button id="run-tests-btn" class="action-btn secondary-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          Run Diagnostics
-        </button>
-        <button id="reset-btn" class="action-btn danger-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-          Reset Workspace
-        </button>
-      </div>
-    </section>
-
-    <!-- Diagnostic Log Panel (Collapsible) -->
-    <div id="diagnostic-pane" class="diagnostic-panel hidden">
-      <div class="diag-header">
-        <div class="diag-title">
-          <span class="diag-indicator"></span>
-          <h3>CRDT ALGORITHMIC TEST VERIFICATION REPORT</h3>
-        </div>
-        <button id="close-diag-btn" class="close-btn">&times;</button>
-      </div>
-      <div id="test-results-log" class="test-results-log font-mono"></div>
-    </div>
-
-    <!-- Triple Workspace Cards -->
-    <main class="replica-grid">
+    <div class="nav-links">
+      <a href="#" class="nav-link active" id="nav-home" onclick="switchView('home-view')">Courses</a>
+      <a href="#" class="nav-link" id="nav-diagnostic" onclick="switchView('diagnostic-view')">Diagnostic Assessment</a>
+      <a href="#" class="nav-link" id="nav-flashcards" onclick="switchView('flashcards-view')">3D AI Flashcards</a>
+      <a href="#" class="nav-link" id="nav-schedule" onclick="switchView('schedule-view')">Study Schedule</a>
+      <a href="#" class="nav-link" id="nav-certificates" onclick="switchView('certificates-view')">Certificates</a>
       
-      <!-- Replica A: Alice -->
-      <article class="replica-card site-A" data-site="A">
-        <header class="card-header">
-          <div class="user-profile">
-            <div class="avatar bg-A">A</div>
-            <div>
-              <h3>Alice</h3>
-              <span class="site-label">Local Replica ID: A</span>
+      <!-- Google Sign-In Container & Quick Sign-In Fallback -->
+      <div id="google-auth-container" style="display: flex; align-items: center; gap: 0.5rem;">
+        <div id="g_id_onload"
+             data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+             data-callback="handleGoogleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin" data-type="standard" data-size="medium" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        
+        <button class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="quickDemoSignIn()" title="Click to instant sign-in without Google API Key">
+          Sign In (Demo)
+        </button>
+      </div>
+
+      <div id="user-profile-pill" class="user-profile-badge" style="display: none;">
+        <img id="user-avatar-img" class="user-avatar" src="" alt="Avatar">
+        <span id="user-display-name">Student</span>
+      </div>
+
+      <button class="btn btn-primary" onclick="openAICourseModal()">Generate Custom Course</button>
+    </div>
+  </nav>
+
+  <!-- Main Application Container -->
+  <main class="app-container">
+
+    <!-- VIEW 1: HOME & COURSE CATALOG -->
+    <section id="home-view" class="view-section">
+      <div class="section-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+          <h1 class="section-title">AI Content Curation & Smart Learning</h1>
+          <p class="section-subtitle">Class-wise, Topic-wise & World Syllabus educational courses with curated video lessons and AI tutoring.</p>
+        </div>
+        <button class="btn btn-secondary" onclick="switchView('diagnostic-view')">Take Diagnostic Test First</button>
+      </div>
+
+      <!-- Filter Controls Bar -->
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label class="filter-label">Search Topic</label>
+          <input type="text" id="filter-search" class="text-input" placeholder="Search Python, Physics, Limits..." oninput="applyFilters()">
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Class Level</label>
+          <select id="filter-class" class="select-input" onchange="applyFilters()">
+            <option value="all">All Class Levels</option>
+            <option value="Class 1-3">Class 1-3 / Junior Primary</option>
+            <option value="Class 4-5">Class 4-5 / Upper Primary</option>
+            <option value="Class 6-8">Class 6-8 / Middle School</option>
+            <option value="Class 9-10">Class 9-10 / Secondary</option>
+            <option value="Class 11-12">Class 11-12 / Higher Secondary</option>
+            <option value="Undergraduate">Undergraduate / Tech</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Subject</label>
+          <select id="filter-subject" class="select-input" onchange="applyFilters()">
+            <option value="all">All Subjects</option>
+            <option value="Computer Science">Computer Science</option>
+            <option value="Physics">Physics</option>
+            <option value="Mathematics">Mathematics</option>
+            <option value="Chemistry">Chemistry</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Syllabus Standard</label>
+          <select id="filter-syllabus" class="select-input" onchange="applyFilters()">
+            <option value="all">All Syllabi</option>
+            <option value="Global">Global Standard</option>
+            <option value="CBSE">CBSE / NCERT</option>
+            <option value="ICSE">ICSE / Cambridge</option>
+            <option value="SAT">SAT / AP Standard</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Course Cards Grid -->
+      <div id="course-grid" class="course-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- VIEW 2: 3D AI FLASHCARDS DECK ENGINE -->
+    <section id="flashcards-view" class="view-section" style="display: none;">
+      <div class="section-header">
+        <h1 class="section-title">3D AI Flashcards & Spaced Repetition Revision</h1>
+        <p class="section-subtitle">Flip cards to test memory retention. System tracks cards you mastered vs those needing review.</p>
+      </div>
+
+      <div class="filter-bar" style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="flashcard-deck-title" style="font-weight: 700; color: var(--slate-dark);">Computer Science & Python Concepts</span>
+        <span id="flashcard-count-badge" style="font-size: 0.85rem; color: var(--slate-medium);">Card 1 of 4</span>
+      </div>
+
+      <div class="flashcard-wrapper">
+        <div id="flashcard-card" class="flashcard-inner" onclick="flipFlashcard()">
+          <div class="flashcard-front">
+            <span class="flashcard-label">Front • Click to Flip</span>
+            <div id="flashcard-question-text" class="flashcard-content">What is Python's execution model?</div>
+            <span style="font-size: 0.8rem; color: var(--slate-muted);">Tap to reveal answer</span>
+          </div>
+
+          <div class="flashcard-back">
+            <span class="flashcard-label">Back • Answer & Explanation</span>
+            <div id="flashcard-answer-text" class="flashcard-content" style="font-size: 1.05rem;">Python source code is compiled into bytecode (.pyc) and interpreted by the Python Virtual Machine (PVM).</div>
+            <span style="font-size: 0.8rem; color: var(--primary);">Spaced Repetition Concept</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: center; gap: 1.5rem; margin-top: 2rem;">
+        <button class="btn btn-outline" style="border-color: #ef4444; color: #b91c1c;" onclick="rateFlashcard(false)">Review Later</button>
+        <button class="btn btn-primary" style="background-color: var(--success-text);" onclick="rateFlashcard(true)">Got It Mastered</button>
+      </div>
+    </section>
+
+    <!-- VIEW 3: DIAGNOSTIC TEST & WEAK POINTS ANALYZER -->
+    <section id="diagnostic-view" class="view-section" style="display: none;">
+      <div class="section-header">
+        <h1 class="section-title">Student Diagnostic Assessment</h1>
+        <p class="section-subtitle">Take an initial diagnostic test based on what you are currently studying. The system will pinpoint your exact weak points and generate a custom complete syllabus course tailored specifically for you.</p>
+      </div>
+
+      <div class="modal-card" style="max-width: 800px; margin: 0 auto;">
+        <div id="diagnostic-setup">
+          <h2 style="font-family: var(--font-heading); font-size: 1.3rem; margin-bottom: 1rem;">Setup Your Diagnostic Assessment</h2>
+          
+          <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="filter-group">
+              <label class="filter-label">Student Name</label>
+              <input type="text" id="diag-student-name" class="text-input" placeholder="Enter your full name" value="Student Learner">
+            </div>
+
+            <div class="filter-group">
+              <label class="filter-label">What Subject Are You Currently Studying?</label>
+              <select id="diag-subject" class="select-input">
+                <option value="Computer Science">Computer Science & Programming</option>
+                <option value="Physics">Physics (Electricity, Magnetism, Mechanics)</option>
+                <option value="Mathematics">Mathematics (Calculus, Algebra)</option>
+                <option value="Chemistry">Chemistry & Molecular Science</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label class="filter-label">Academic Class Level</label>
+              <select id="diag-class" class="select-input">
+                <option value="Class 1-3">Class 1-3 / Junior Primary</option>
+                <option value="Class 4-5">Class 4-5 / Upper Primary</option>
+                <option value="Class 6-8">Class 6-8 / Middle School</option>
+                <option value="Class 9-10">Class 9-10 / Secondary</option>
+                <option value="Class 11-12">Class 11-12 / Higher Secondary</option>
+                <option value="Undergraduate">Undergraduate / Tech</option>
+              </select>
             </div>
           </div>
-          <button id="toggle-A" class="status-pill online">ONLINE</button>
-        </header>
 
-        <!-- Network connection visual ribbon -->
-        <div class="connection-status-ribbon online" id="ribbon-A">
-          <svg class="icon-conn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-          <span class="conn-text">Active connection to global log</span>
+          <button class="btn btn-primary" style="width: 100%;" onclick="startDiagnosticTest()">Start Diagnostic Evaluation →</button>
         </div>
 
-        <div class="presence-bar">
-          <span class="presence-hdr">Presence List:</span>
-          <div class="presence-chips">
-            <span class="pres-chip" id="presence-A-B">
-              <span class="status-dot bg-B"></span> Bob: <span class="status-text">ONLINE</span>
-            </span>
-            <span class="pres-chip" id="presence-A-C">
-              <span class="status-dot bg-C"></span> Charlie: <span class="status-text">ONLINE</span>
-            </span>
+        <div id="diagnostic-quiz-screen" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <span style="font-size: 0.85rem; font-weight: 700; color: var(--primary);">Diagnostic Assessment</span>
+            <span id="diag-progress-text" style="color: var(--slate-muted); font-size: 0.85rem;">Question 1 of 4</span>
+          </div>
+
+          <h3 id="diag-question-text" style="font-size: 1.15rem; color: var(--slate-dark); margin-bottom: 1.25rem;">Diagnostic Question?</h3>
+
+          <div id="diag-options-container">
+            <!-- Rendered dynamically -->
           </div>
         </div>
 
-        <div class="editor-wrapper">
-          <!-- The Editable Container -->
-          <div id="editor-A" class="editor-pane" tabindex="0" data-site="A"></div>
-          <div class="focus-indicator"></div>
-        </div>
+        <div id="diagnostic-report-screen" style="display: none;">
+          <h2 style="font-family: var(--font-heading); font-size: 1.4rem; color: var(--slate-dark); margin-bottom: 0.5rem;">Diagnostic Evaluation & Weak Points Analysis</h2>
+          <p style="color: var(--slate-medium); font-size: 0.9rem;">Analysis complete for your subject assessment.</p>
 
-        <footer class="card-footer">
-          <div class="footer-metric">
-            <span class="metric-lbl">VISIBLE LENGTH</span>
-            <span id="char-count-A" class="metric-val">0</span>
-          </div>
-          <div class="footer-metric">
-            <span class="metric-lbl">DATABASE OPS SEEN</span>
-            <span id="ops-seen-A" class="metric-val font-mono">0</span>
-          </div>
-        </footer>
-      </article>
+          <div class="report-card" style="margin: 1.25rem 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <div>
+                <span style="font-size: 0.8rem; font-weight: 700; color: var(--slate-muted); text-transform: uppercase;">Overall Score</span>
+                <div id="diag-score-display" style="font-size: 2rem; font-weight: 800; color: var(--primary);">75%</div>
+              </div>
+              <div>
+                <span style="font-size: 0.8rem; font-weight: 700; color: var(--slate-muted); text-transform: uppercase;">Mastery Status</span>
+                <div id="diag-status-display" style="font-size: 1.1rem; font-weight: 700; color: var(--slate-dark);">Needs Concept Strengthening</div>
+              </div>
+            </div>
 
-      <!-- Replica B: Bob -->
-      <article class="replica-card site-B" data-site="B">
-        <header class="card-header">
-          <div class="user-profile">
-            <div class="avatar bg-B">B</div>
-            <div>
-              <h3>Bob</h3>
-              <span class="site-label">Local Replica ID: B</span>
+            <hr style="border-color: var(--border-light); margin: 1rem 0;">
+
+            <h3 style="font-size: 1rem; color: var(--slate-dark); margin-bottom: 0.5rem;">Identified Conceptual Weak Points:</h3>
+            <div id="diag-weak-points-list">
+              <!-- Rendered dynamically -->
             </div>
           </div>
-          <button id="toggle-B" class="status-pill online">ONLINE</button>
-        </header>
 
-        <!-- Network connection visual ribbon -->
-        <div class="connection-status-ribbon online" id="ribbon-B">
-          <svg class="icon-conn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-          <span class="conn-text">Active connection to global log</span>
-        </div>
-
-        <div class="presence-bar">
-          <span class="presence-hdr">Presence List:</span>
-          <div class="presence-chips">
-            <span class="pres-chip" id="presence-B-A">
-              <span class="status-dot bg-A"></span> Alice: <span class="status-text">ONLINE</span>
-            </span>
-            <span class="pres-chip" id="presence-B-C">
-              <span class="status-dot bg-C"></span> Charlie: <span class="status-text">ONLINE</span>
-            </span>
-          </div>
-        </div>
-
-        <div class="editor-wrapper">
-          <div id="editor-B" class="editor-pane" tabindex="0" data-site="B"></div>
-          <div class="focus-indicator"></div>
-        </div>
-
-        <footer class="card-footer">
-          <div class="footer-metric">
-            <span class="metric-lbl">VISIBLE LENGTH</span>
-            <span id="char-count-B" class="metric-val">0</span>
-          </div>
-          <div class="footer-metric">
-            <span class="metric-lbl">DATABASE OPS SEEN</span>
-            <span id="ops-seen-B" class="metric-val font-mono">0</span>
-          </div>
-        </footer>
-      </article>
-
-      <!-- Replica C: Charlie -->
-      <article class="replica-card site-C" data-site="C">
-        <header class="card-header">
-          <div class="user-profile">
-            <div class="avatar bg-C">C</div>
-            <div>
-              <h3>Charlie</h3>
-              <span class="site-label">Local Replica ID: C</span>
-            </div>
-          </div>
-          <button id="toggle-C" class="status-pill online">ONLINE</button>
-        </header>
-
-        <!-- Network connection visual ribbon -->
-        <div class="connection-status-ribbon online" id="ribbon-C">
-          <svg class="icon-conn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-          <span class="conn-text">Active connection to global log</span>
-        </div>
-
-        <div class="presence-bar">
-          <span class="presence-hdr">Presence List:</span>
-          <div class="presence-chips">
-            <span class="pres-chip" id="presence-C-A">
-              <span class="status-dot bg-A"></span> Alice: <span class="status-text">ONLINE</span>
-            </span>
-            <span class="pres-chip" id="presence-C-B">
-              <span class="status-dot bg-B"></span> Bob: <span class="status-text">ONLINE</span>
-            </span>
-          </div>
-        </div>
-
-        <div class="editor-wrapper">
-          <div id="editor-C" class="editor-pane" tabindex="0" data-site="C"></div>
-          <div class="focus-indicator"></div>
-        </div>
-
-        <footer class="card-footer">
-          <div class="footer-metric">
-            <span class="metric-lbl">VISIBLE LENGTH</span>
-            <span id="char-count-C" class="metric-val">0</span>
-          </div>
-          <div class="footer-metric">
-            <span class="metric-lbl">DATABASE OPS SEEN</span>
-            <span id="ops-seen-C" class="metric-val font-mono">0</span>
-          </div>
-        </footer>
-      </article>
-
-    </main>
-
-    <!-- Operations Telemetry Console -->
-    <section class="telemetry-console">
-      <header class="console-header">
-        <div class="console-title-group">
-          <span class="terminal-ring"></span>
-          <h2>SEQUENCED DATABASE TRANSACTION LEDGER</h2>
-        </div>
-        <div class="console-filters">
-          <span class="filter-lbl">Filter Source:</span>
-          <button class="filter-btn active" data-filter="all">ALL</button>
-          <button class="filter-btn" data-filter="A">ALICE (A)</button>
-          <button class="filter-btn" data-filter="B">BOB (B)</button>
-          <button class="filter-btn" data-filter="C">CHARLIE (C)</button>
-        </div>
-      </header>
-
-      <div class="terminal-window">
-        <div id="sync-log-entries" class="terminal-body font-mono">
-          <!-- Populated dynamically -->
+          <button id="btn-build-individualized" class="btn btn-primary" style="width: 100%;" onclick="generateIndividualizedCourseFromReport()">
+            Build My Individualized Complete Syllabus Course →
+          </button>
         </div>
       </div>
     </section>
 
+    <!-- VIEW 4: CLASSROOM, CODE SANDBOX & VOICE AI -->
+    <section id="classroom-view" class="view-section" style="display: none;">
+      <div style="margin-bottom: 1rem;">
+        <button class="btn btn-outline" onclick="switchView('home-view')">← Back to Courses</button>
+      </div>
+
+      <div class="classroom-layout">
+        <!-- Left Column: Video Player, Notes & Interactive Code Sandbox -->
+        <div>
+          <div class="video-container">
+            <iframe id="youtube-player" src="" allowfullscreen allow="autoplay"></iframe>
+          </div>
+
+          <div class="lesson-info-box">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+              <div>
+                <h2 id="lesson-title" style="font-family: var(--font-heading); color: var(--slate-dark); font-size: 1.4rem;">Lesson Title</h2>
+                <p id="lesson-duration" style="color: var(--slate-muted); font-size: 0.85rem; margin-top: 0.2rem;"></p>
+              </div>
+              <button class="btn btn-primary" onclick="openQuizModal()">Take Topic Quiz</button>
+            </div>
+
+            <hr style="border-color: var(--border-light); margin: 1.25rem 0;">
+
+            <h3 style="color: var(--slate-dark); font-size: 1rem; margin-bottom: 0.5rem;">Lesson Summary & Key Principles</h3>
+            <p id="lesson-summary" style="color: var(--slate-dark); font-size: 0.95rem; line-height: 1.5;"></p>
+
+            <ul id="lesson-notes-list" class="lesson-notes-list">
+              <!-- Rendered dynamically -->
+            </ul>
+          </div>
+
+          <!-- Interactive Code & Math Formula Sandbox -->
+          <div class="code-sandbox-container">
+            <div class="sandbox-header">
+              <span>Interactive Code & Formula Sandbox</span>
+              <button class="btn btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="runSandboxCode()">Run Live Code</button>
+            </div>
+            <textarea id="sandbox-code-input" class="sandbox-textarea" spellcheck="false"># Test your Python code or math formula live
+def calculate_mastery(score, total):
+    return (score / total) * 100
+
+print("Mastery Score:", calculate_mastery(4, 5), "%")</textarea>
+            <div id="sandbox-output" class="sandbox-output">Output: Click 'Run Live Code' to execute.</div>
+          </div>
+        </div>
+
+        <!-- Right Column: Sidebar Topics & Voice AI Tutor -->
+        <div>
+          <div class="sidebar-panel">
+            <h3 id="course-title-sidebar" style="font-family: var(--font-heading); color: var(--slate-dark); font-size: 1.1rem;">Course Topics</h3>
+            <div id="topic-list" class="topic-list">
+              <!-- Topic items rendered dynamically -->
+            </div>
+
+            <button id="claim-cert-btn" class="btn btn-secondary" style="margin-top: 1rem; width: 100%; display: none;" onclick="claimCourseCertificate()">
+              Claim Completion Certificate
+            </button>
+          </div>
+
+          <!-- Clean White Interactive AI Drawer with Voice Tutor -->
+          <div class="ai-drawer">
+            <div class="ai-drawer-header">
+              <span>Voice & Text AI Assistant</span>
+              <div style="display: flex; gap: 0.4rem;">
+                <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="toggleVoiceInput()" title="Speak to AI Mic">Mic</button>
+                <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="toggleVoiceOutput()" title="Toggle Read Aloud">Voice Out</button>
+              </div>
+            </div>
+
+            <div id="chat-box" class="chat-box">
+              <div class="chat-bubble ai">
+                Hello. I am your Interactive AI Voice Tutor. You can type or click Mic to speak your question aloud!
+              </div>
+            </div>
+
+            <div class="chat-input-bar">
+              <input type="text" id="chat-input" class="text-input" placeholder="Ask AI Assistant..." style="flex-grow: 1;" onkeypress="if(event.key==='Enter') sendChatMessage()">
+              <button class="btn btn-primary" onclick="sendChatMessage()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 5: AI STUDY SCHEDULE -->
+    <section id="schedule-view" class="view-section" style="display: none;">
+      <div class="section-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+          <h1 class="section-title">AI Study Schedule & Exam Planner</h1>
+          <p class="section-subtitle">Personalized timetable based on exam target dates and identified weak subjects.</p>
+        </div>
+        <button class="btn btn-primary" onclick="generateNewSchedule()">Re-Generate Schedule</button>
+      </div>
+
+      <div id="schedule-grid" class="filter-bar" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- VIEW 6: CERTIFICATES -->
+    <section id="certificates-view" class="view-section" style="display: none;">
+      <div class="section-header">
+        <h1 class="section-title">Verified Completion Certificates</h1>
+        <p class="section-subtitle">Official certificates awarded upon finishing complete course assessments.</p>
+      </div>
+
+      <div id="certificates-list" class="course-grid">
+        <!-- Certificates rendered dynamically -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL 1: DYNAMIC AI COURSE GENERATOR -->
+  <div id="ai-course-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h2 style="font-family: var(--font-heading); color: var(--slate-dark); margin-bottom: 0.5rem;">Generate Custom Course</h2>
+      <p style="color: var(--slate-medium); font-size: 0.85rem; margin-bottom: 1.5rem;">
+        Enter any subject topic, grade level, and syllabus standard to generate a curated course.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="filter-group">
+          <label class="filter-label">Course / Topic Name</label>
+          <input type="text" id="gen-topic" class="text-input" placeholder="e.g. Quantum Physics, Machine Learning, Organic Chemistry">
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Class Level</label>
+          <select id="gen-class" class="select-input">
+            <option value="Class 10">Class 10 / Secondary</option>
+            <option value="Class 11-12">Class 11 & 12 / High School</option>
+            <option value="Undergraduate">Undergraduate / Tech</option>
+            <option value="Competitive Exam">SAT / JEE / NEET / GCSE</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Subject Category</label>
+          <input type="text" id="gen-subject" class="text-input" placeholder="e.g. Physics, Computer Science, Math">
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Syllabus Standard</label>
+          <select id="gen-syllabus" class="select-input">
+            <option value="Global Standard">Global Standard</option>
+            <option value="CBSE / NCERT">CBSE / NCERT (India)</option>
+            <option value="Cambridge / IGCSE">Cambridge / IGCSE / A-Levels</option>
+            <option value="AP / SAT Standard">AP / SAT Standard (US)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.75rem;">
+        <button class="btn btn-outline" onclick="closeAICourseModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAICourseGenerator()">Generate Course</button>
+      </div>
+    </div>
   </div>
 
+  <!-- MODAL 2: ADAPTIVE QUIZ MODAL -->
+  <div id="quiz-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <span style="font-size: 0.8rem; color: var(--primary); font-weight: 700; text-transform: uppercase;">Knowledge Assessment</span>
+        <span id="quiz-progress-text" style="color: var(--slate-muted); font-size: 0.85rem;">Question 1 of 2</span>
+      </div>
+
+      <h3 id="quiz-question-text" style="font-size: 1.15rem; color: var(--slate-dark); margin-bottom: 1.25rem;">Question text goes here?</h3>
+
+      <div id="quiz-options-container">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div id="quiz-explanation-box" style="display: none; margin-top: 1.25rem; padding: 1rem; background-color: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 0.88rem;">
+        <!-- Explanation -->
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem; gap: 1rem;">
+        <button class="btn btn-outline" onclick="closeQuizModal()">Close</button>
+        <button id="quiz-next-btn" class="btn btn-primary" style="display: none;" onclick="nextQuizQuestion()">Next Question →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: CERTIFICATE VIEW & PRINT MODAL -->
+  <div id="cert-modal" class="modal-overlay">
+    <div style="background-color: var(--bg-main); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 2rem; max-width: 900px; width: 100%; overflow-y: auto; max-height: 90vh;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="color: var(--slate-dark); font-family: var(--font-heading);">Official Completion Certificate</h2>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-primary" onclick="window.print()">Print / Save PDF</button>
+          <button class="btn btn-outline" onclick="closeCertModal()">Close</button>
+        </div>
+      </div>
+
+      <div class="certificate-preview-container">
+        <div id="certificate-paper" class="certificate-paper">
+          <div>
+            <div class="cert-header">Certificate of Completion</div>
+            <p style="color: var(--slate-medium); font-size: 0.95rem; margin-top: 0.5rem;">AI-Driven Learning Support System</p>
+          </div>
+
+          <div>
+            <p style="color: var(--slate-medium); font-size: 1rem;">This is proudly presented to</p>
+            <div id="cert-student-name-display" class="cert-student-name">Learner Name</div>
+            <p style="color: var(--slate-medium); font-size: 1rem; margin-top: 0.5rem;">for successfully completing the course assessment in</p>
+            <div id="cert-course-name-display" class="cert-course-name">Course Title</div>
+          </div>
+
+          <div class="cert-footer">
+            <div style="text-align: left;">
+              <p><strong>Issued On:</strong> <span id="cert-date-display">Date</span></p>
+              <p><strong>Score Achieved:</strong> <span id="cert-score-display">95%</span></p>
+            </div>
+
+            <div class="cert-seal">VERIFIED</div>
+
+            <div style="text-align: right;">
+              <p><strong>Verification ID:</strong></p>
+              <p id="cert-id-display" style="font-family: monospace; color: var(--slate-dark);">CERT-XXXXXX</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,27 +1,31 @@
 {
-  "name": "nirmal-masala-bhandar",
+  "name": "ai-learning-support-system",
   "version": "1.0.0",
-  "description": "Nirmal Masala Bhandar - Heritage Spice & Tea Shop in Jodhpur (Full-Stack)",
+  "description": "AI-Driven Learning Support System with Content Curation, Smart Learning, and Certificate Generation",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "echo \"No tests configured\" && exit 0"
+    "dev": "node --watch server.js"
   },
   "dependencies": {
+    "@google/genai": "^2.17.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.21.1"
   },
   "keywords": [
-    "spice-shop",
-    "express",
-    "sqlite",
-    "full-stack",
-    "jodhpur"
+    "ai-learning",
+    "content-curation",
+    "smart-learning",
+    "edtech",
+    "youtube-courses",
+    "adaptive-quizzes",
+    "certificate-generator"
   ],
-  "author": "Nirmal Masala Bhandar",
-  "license": "ISC",
+  "author": "AI Learning Platform",
+  "license": "MIT",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=18.0.0"
   }
 }

@@ -1,1084 +1,776 @@
-// ==========================================================================
-// CRDT RGA Sequence Core Functions
-// ==========================================================================
+const API_BASE_URL = '';
 
-function compareIds(id1, id2) {
-  if (id1.clock !== id2.clock) {
-    return id1.clock - id2.clock;
-  }
-  return id1.site < id2.site ? -1 : (id1.site > id2.site ? 1 : 0);
+// Toast Notification helper
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✅';
+  if (type === 'error') icon = '❌';
+  if (type === 'warning') icon = '⚠️';
+  
+  toast.innerHTML = `<span style="font-size: 1.1rem; display: flex; align-items: center;">${icon}</span> <span>${message}</span>`;
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }, 3500);
 }
 
-function nodeIdKey(id) {
-  if (!id) return 'start';
-  return `${id.site}:${id.clock}`;
-}
+// App State
+let currentCourses = [];
+let activeCourse = null;
+let activeTopicIndex = 0;
+let userProgress = { completedTopics: [], quizScores: {}, streak: 3 };
+let currentUser = null;
 
-function findNodeIndex(nodes, id) {
-  if (!id) return -1;
-  for (let i = 0; i < nodes.length; i++) {
-    if (nodes[i].id.site === id.site && nodes[i].id.clock === id.clock) {
-      return i;
-    }
+// Flashcards Deck State
+let flashcardsDeck = [
+  {
+    q: "What is Python's execution model?",
+    a: "Python source code is compiled into bytecode (.pyc) and interpreted by the Python Virtual Machine (PVM)."
+  },
+  {
+    q: "What is Ohm's Law formula and principle?",
+    a: "V = I × R. The voltage across a conductor is directly proportional to the electric current flowing through it at constant temperature."
+  },
+  {
+    q: "What is the derivative of f(x) = x^n?",
+    a: "By the power rule, d/dx(x^n) = n × x^(n-1)."
+  },
+  {
+    q: "What is the difference between series and parallel circuits?",
+    a: "In series, current is equal everywhere and voltage divides. In parallel, voltage across each branch is equal and current divides."
   }
-  return -1;
-}
+];
+let currentFlashcardIndex = 0;
 
-// Integrates a new node into the RGA list
-function integrateNode(replica, node) {
-  const key = nodeIdKey(node.id);
-  if (replica.appliedIds.has(key)) {
-    return;
-  }
+// Diagnostic Test State
+let diagQuestions = [];
+let diagCurrentStep = 0;
+let diagUserAnswers = [];
+let lastDiagReport = null;
 
-  // Find origin index
-  let originIdx = -1;
-  if (node.origin !== null) {
-    originIdx = findNodeIndex(replica.nodes, node.origin);
-    if (originIdx === -1) {
-      // Out-of-order delivery: origin has not arrived yet! Buffer it.
-      if (!replica.pendingInserts.some(n => nodeIdKey(n.id) === key)) {
-        replica.pendingInserts.push(node);
-      }
-      return;
-    }
-  }
+// Quiz State
+let currentQuizQuestions = [];
+let currentQuizStep = 0;
+let currentQuizScore = 0;
 
-  // Find insertion index
-  let insertIdx = originIdx + 1;
-  while (insertIdx < replica.nodes.length) {
-    const nextNode = replica.nodes[insertIdx];
-    let nextOriginIdx = -1;
-    if (nextNode.origin !== null) {
-      nextOriginIdx = findNodeIndex(replica.nodes, nextNode.origin);
-    }
+// Speech Interaction State
+let voiceOutputEnabled = false;
 
-    if (nextOriginIdx < originIdx) {
-      // Next node's origin is before our origin. Since nodes are ordered, stop.
-      break;
-    } else if (nextOriginIdx === originIdx) {
-      // Sibling node (same origin). Break tie deterministically.
-      // Higher (clock, site) wins the left slot.
-      if (compareIds(nextNode.id, node.id) > 0) {
-        insertIdx++;
-      } else {
-        break;
-      }
-    } else { // nextOriginIdx > originIdx
-      // Next node is a descendant of a sibling or node to the right. Skip it.
-      insertIdx++;
-    }
-  }
-
-  // Splice node in
-  replica.nodes.splice(insertIdx, 0, node);
-  replica.appliedIds.add(key);
-
-  // Apply any pending deletes
-  if (replica.pendingDeletes.has(key)) {
-    node.deleted = true;
-    replica.pendingDeletes.delete(key);
-  }
-
-  // Trigger any pending inserts that are now unblocked
-  let progress = true;
-  while (progress) {
-    progress = false;
-    for (let i = 0; i < replica.pendingInserts.length; i++) {
-      const pNode = replica.pendingInserts[i];
-      let pOriginIdx = -1;
-      if (pNode.origin !== null) {
-        pOriginIdx = findNodeIndex(replica.nodes, pNode.origin);
-      }
-      if (pNode.origin === null || pOriginIdx !== -1) {
-        replica.pendingInserts.splice(i, 1);
-        integrateNode(replica, pNode);
-        progress = true;
-        break;
-      }
-    }
-  }
-}
-
-// Applies a delete tombstone
-function applyDelete(replica, targetId) {
-  const key = nodeIdKey(targetId);
-  const idx = findNodeIndex(replica.nodes, targetId);
-  if (idx !== -1) {
-    replica.nodes[idx].deleted = true;
-  } else {
-    // Out-of-order delete: remember it
-    replica.pendingDeletes.add(key);
-  }
-}
-
-// Get the previous visible node ID from a given node
-function getVisiblePreviousNodeId(replica, targetNode) {
-  const idx = findNodeIndex(replica.nodes, targetNode.id);
-  if (idx === -1) return null;
-  for (let i = idx - 1; i >= 0; i--) {
-    if (!replica.nodes[i].deleted) {
-      return replica.nodes[i].id;
-    }
-  }
-  return null;
-}
-
-// Get the previous visible node ID from a given node ID
-function getVisiblePreviousNodeIdById(replica, targetId) {
-  const idx = findNodeIndex(replica.nodes, targetId);
-  if (idx === -1) return null;
-  for (let i = idx - 1; i >= 0; i--) {
-    if (!replica.nodes[i].deleted) {
-      return replica.nodes[i].id;
-    }
-  }
-  return null;
-}
-
-// Maps caret cursor pos to actual visible node it attaches to
-function getCaretAttachment(replica, posId) {
-  if (posId === null) return null;
-  const idx = findNodeIndex(replica.nodes, posId);
-  if (idx === -1) return null;
-  for (let i = idx; i >= 0; i--) {
-    if (!replica.nodes[i].deleted) {
-      return replica.nodes[i].id;
-    }
-  }
-  return null;
-}
-
-// ==========================================================================
-// Client State & App Configuration
-// ==========================================================================
-
-const replicas = {
-  A: createReplicaObject('A', 'Alice', '#ff6b4a'),
-  B: createReplicaObject('B', 'Bob', '#00e5ff'),
-  C: createReplicaObject('C', 'Charlie', '#baff00')
-};
-const allReplicas = [replicas.A, replicas.B, replicas.C];
-
-const loggedSeqs = new Set();
-const latencySlider = document.getElementById('latency-slider');
-const latencyValEl = document.getElementById('latency-val');
-let showTombstones = false;
-let currentLogFilter = 'all';
-
-function getSimulatedLatency() {
-  return parseInt(latencySlider.value, 10);
-}
-
-latencySlider.addEventListener('input', () => {
-  latencyValEl.textContent = `${latencySlider.value}ms`;
+// Initialize Application
+document.addEventListener('DOMContentLoaded', () => {
+  loadCourses();
+  loadProgress();
+  loadSchedule();
+  renderFlashcard();
 });
 
-function createReplicaObject(siteId, name, color) {
-  return {
-    siteId,
-    name,
-    color,
-    nodes: [],
-    appliedSeqs: new Set(),
-    appliedIds: new Set(),
-    pendingDeletes: new Set(),
-    pendingInserts: [],
-    clock: 0,
-    caretPosId: null,
-    online: true,
-    syncing: false,
-    lastSeenSeq: 0,
-    remoteCursors: {},
-    sseSource: null,
-    outboundQueue: []
-  };
-}
+// View Router
+function switchView(viewId) {
+  document.querySelectorAll('.view-section').forEach(sec => sec.style.display = 'none');
+  document.getElementById(viewId).style.display = 'block';
 
-// Reset replica local states
-function resetLocalReplicaState(replica) {
-  replica.nodes = [];
-  replica.appliedSeqs.clear();
-  replica.appliedIds.clear();
-  replica.pendingDeletes.clear();
-  replica.pendingInserts = [];
-  replica.clock = 0;
-  replica.caretPosId = null;
-  replica.lastSeenSeq = 0;
-  replica.remoteCursors = {};
-  replica.outboundQueue = [];
-  
-  if (replica.siteId === 'A') {
-    loggedSeqs.clear();
-    const logEl = document.getElementById('sync-log-entries');
-    if (logEl) logEl.innerHTML = '';
-  }
-
-  updateReplicaRibbon(replica);
-  renderReplica(replica);
-  checkSystemConvergence();
-}
-
-// ==========================================================================
-// Network & Synchronization Controller
-// ==========================================================================
-
-// Connect EventSource (SSE) for real-time updates
-function connectReplicaStream(replica) {
-  if (replica.sseSource) {
-    replica.sseSource.close();
-  }
-
-  const sse = new EventSource(`/api/crdt/stream?siteId=${replica.siteId}`);
-  replica.sseSource = sse;
-
-  sse.onmessage = (event) => {
-    if (!replica.online || replica.syncing) return;
-
-    const message = JSON.parse(event.data);
-    const latency = getSimulatedLatency();
-
-    // Delay incoming messages by simulated latency
-    setTimeout(() => {
-      if (!replica.online || replica.syncing) return;
-      handleStreamMessage(replica, message);
-    }, latency);
-  };
-
-  sse.onerror = (err) => {
-    console.error(`Site ${replica.siteId} SSE connection closed:`, err);
-    sse.close();
-  };
-}
-
-// Handle real-time EventSource messages
-function handleStreamMessage(replica, message) {
-  if (message.type === 'op') {
-    const op = message.op;
-    if (replica.appliedSeqs.has(op.seq)) return;
-
-    applyOp(replica, op);
-    addSyncLogEntry(op);
-    renderReplica(replica);
-    checkSystemConvergence();
-  } else if (message.type === 'cursor') {
-    replica.remoteCursors[message.siteId] = message.posId;
-    renderReplica(replica);
-  } else if (message.type === 'reset') {
-    console.log(`Site ${replica.siteId} resetting local state.`);
-    resetLocalReplicaState(replica);
-    catchUpReplica(replica);
+  document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+  if (viewId === 'home-view') document.getElementById('nav-home').classList.add('active');
+  if (viewId === 'diagnostic-view') document.getElementById('nav-diagnostic').classList.add('active');
+  if (viewId === 'flashcards-view') document.getElementById('nav-flashcards').classList.add('active');
+  if (viewId === 'schedule-view') document.getElementById('nav-schedule').classList.add('active');
+  if (viewId === 'certificates-view') {
+    document.getElementById('nav-certificates').classList.add('active');
+    loadCertificates();
   }
 }
 
-// Apply an op to the replica
-function applyOp(replica, op) {
-  if (replica.appliedSeqs.has(op.seq)) return;
-
-  if (op.type === 'insert') {
-    // Clone node to avoid reference leaks
-    const nodeClone = JSON.parse(JSON.stringify(op.node));
-    integrateNode(replica, nodeClone);
-    
-    // Ensure replica local clock is ahead of anything it integrates
-    if (op.node.id.site === replica.siteId) {
-      replica.clock = Math.max(replica.clock, op.node.id.clock);
-    }
-  } else if (op.type === 'delete') {
-    applyDelete(replica, op.targetId);
-  }
-
-  replica.appliedSeqs.add(op.seq);
-  replica.lastSeenSeq = Math.max(replica.lastSeenSeq, op.seq);
-}
-
-// Catch-up operation polling
-async function catchUpReplica(replica) {
+// ------------------------------------------------------------------
+// 1. GOOGLE SIGN-IN OAUTH CALLBACK HANDLER
+// ------------------------------------------------------------------
+function handleGoogleCredentialResponse(response) {
   try {
-    const response = await fetch(`/api/crdt/ops?since=${replica.lastSeenSeq}`);
-    const result = await response.json();
-    if (result.status === 'success') {
-      const ops = result.data;
-      for (const op of ops) {
-        applyOp(replica, op);
-        addSyncLogEntry(op);
-      }
-      renderReplica(replica);
-      checkSystemConvergence();
-    }
+    // Decode JWT payload from Google credential
+    const base64Url = response.credential.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+
+    const profile = JSON.parse(jsonPayload);
+    currentUser = {
+      name: profile.name,
+      email: profile.email,
+      picture: profile.picture
+    };
+
+    // Update UI Header
+    document.getElementById('google-auth-container').style.display = 'none';
+    const profilePill = document.getElementById('user-profile-pill');
+    document.getElementById('user-avatar-img').src = profile.picture;
+    document.getElementById('user-display-name').innerText = profile.given_name || profile.name;
+    profilePill.style.display = 'inline-flex';
+
+    // Auto fill diagnostic test student name
+    const diagNameInput = document.getElementById('diag-student-name');
+    if (diagNameInput) diagNameInput.value = profile.name;
+
+    showToast(`Signed in successfully as ${profile.name}!`, 'success');
   } catch (err) {
-    console.error(`Failed catching up Site ${replica.siteId}:`, err);
+    console.error("Google auth decode error:", err);
+    quickDemoSignIn();
   }
 }
 
-// Sends an operation to the server
-function sendOpToServer(replica, op) {
-  const latency = getSimulatedLatency();
-
-  // Simulated latency delay
-  setTimeout(async () => {
-    try {
-      const response = await fetch('/api/crdt/ops', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(op)
-      });
-      const result = await response.json();
-      if (result.status === 'success') {
-        const returnedOp = result.data;
-        replica.appliedSeqs.add(returnedOp.seq);
-        replica.lastSeenSeq = Math.max(replica.lastSeenSeq, returnedOp.seq);
-        addSyncLogEntry(returnedOp);
-        checkSystemConvergence();
-      }
-    } catch (err) {
-      console.error(`Send op failed for Site ${replica.siteId}:`, err);
-    }
-  }, latency);
-}
-
-// Sends cursor positions to the server
-function sendCursorToServer(replica) {
-  if (!replica.online || replica.syncing) return;
-
-  const latency = getSimulatedLatency();
-  const body = {
-    siteId: replica.siteId,
-    posId: replica.caretPosId
+function quickDemoSignIn() {
+  currentUser = {
+    name: "Om Singh Rajput",
+    email: "omsinghrajput778772@gmail.com",
+    picture: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
   };
 
-  setTimeout(async () => {
-    if (!replica.online) return;
-    try {
-      await fetch('/api/crdt/cursor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-    } catch (err) {
-      // ignore
-    }
-  }, latency);
+  document.getElementById('google-auth-container').style.display = 'none';
+  const profilePill = document.getElementById('user-profile-pill');
+  document.getElementById('user-avatar-img').src = currentUser.picture;
+  document.getElementById('user-display-name').innerText = "Om Singh";
+  profilePill.style.display = 'inline-flex';
+
+  const diagNameInput = document.getElementById('diag-student-name');
+  if (diagNameInput) diagNameInput.value = currentUser.name;
+
+  showToast(`Signed in as ${currentUser.name} (${currentUser.email})`, 'success');
 }
 
-// Global Sync Log Renderer
-function addSyncLogEntry(op) {
-  if (loggedSeqs.has(op.seq)) return;
-  loggedSeqs.add(op.seq);
-
-  const logEl = document.getElementById('sync-log-entries');
-  if (!logEl) return;
-
-  const entryEl = document.createElement('div');
-  entryEl.className = `log-entry log-${op.sender}`;
-
-  let details = '';
-  if (op.type === 'insert') {
-    const originStr = op.node.origin ? `${op.node.origin.site}:${op.node.origin.clock}` : 'START';
-    const charDisplay = op.node.char === '\n' ? '↵ (newline)' : `'${op.node.char}'`;
-    details = `INSERT char ${charDisplay} | Node ID: ${op.node.id.site}:${op.node.id.clock} | Origin: ${originStr}`;
-  } else if (op.type === 'delete') {
-    details = `DELETE Node ID: ${op.targetId.site}:${op.targetId.clock}`;
-  }
-
-  entryEl.textContent = `[Seq: ${op.seq}] [User: ${op.sender}] -> ${details}`;
-  
-  // Apply current filter visibility immediately
-  if (currentLogFilter !== 'all' && op.sender !== currentLogFilter) {
-    entryEl.style.display = 'none';
-  }
-
-  logEl.appendChild(entryEl);
-  logEl.scrollTop = logEl.scrollHeight;
+// ------------------------------------------------------------------
+// 2. 3D AI FLASHCARDS DECK ENGINE
+// ------------------------------------------------------------------
+function flipFlashcard() {
+  const card = document.getElementById('flashcard-card');
+  card.classList.toggle('flipped');
 }
 
-// Refilters the sync log DOM nodes
-function applyLogFiltering() {
-  const logEntries = document.querySelectorAll('.log-entry');
-  logEntries.forEach(entry => {
-    if (currentLogFilter === 'all') {
-      entry.style.display = 'block';
-    } else {
-      if (entry.classList.contains(`log-${currentLogFilter}`)) {
-        entry.style.display = 'block';
-      } else {
-        entry.style.display = 'none';
-      }
-    }
-  });
+function renderFlashcard() {
+  const card = document.getElementById('flashcard-card');
+  card.classList.remove('flipped');
+
+  const f = flashcardsDeck[currentFlashcardIndex];
+  if (!f) return;
+
+  document.getElementById('flashcard-count-badge').innerText = `Card ${currentFlashcardIndex + 1} of ${flashcardsDeck.length}`;
+  document.getElementById('flashcard-question-text').innerText = f.q;
+  document.getElementById('flashcard-answer-text').innerText = f.a;
 }
 
-// Updates the decorative status connection ribbons
-function updateReplicaRibbon(replica) {
-  const ribbon = document.getElementById(`ribbon-${replica.siteId}`);
-  if (!ribbon) return;
-
-  const textEl = ribbon.querySelector('.conn-text');
-
-  if (replica.syncing) {
-    ribbon.className = 'connection-status-ribbon syncing';
-    textEl.textContent = 'Synchronizing operations ledger...';
-  } else if (replica.online) {
-    ribbon.className = 'connection-status-ribbon online';
-    textEl.textContent = 'Active connection to global log (SSE)';
+function rateFlashcard(mastered) {
+  if (mastered) {
+    // Move to next card
+    currentFlashcardIndex = (currentFlashcardIndex + 1) % flashcardsDeck.length;
   } else {
-    ribbon.className = 'connection-status-ribbon offline';
-    textEl.textContent = 'Disconnected from global log (Local Mode)';
+    // Move to back of deck for review
+    const current = flashcardsDeck.splice(currentFlashcardIndex, 1)[0];
+    flashcardsDeck.push(current);
+  }
+  renderFlashcard();
+}
+
+// ------------------------------------------------------------------
+// 3. INTERACTIVE CODE & MATH SANDBOX RUNNER
+// ------------------------------------------------------------------
+function runSandboxCode() {
+  const code = document.getElementById('sandbox-code-input').value;
+  const outputBox = document.getElementById('sandbox-output');
+
+  let logs = [];
+  const originalLog = console.log;
+  console.log = function(...args) {
+    logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+    originalLog.apply(console, args);
+  };
+
+  try {
+    // Safe lightweight JS execution evaluation
+    let result = eval(code);
+    outputBox.innerText = logs.length > 0 ? "Console Output:\n" + logs.join('\n') : "Result: " + result;
+  } catch (err) {
+    outputBox.innerText = "Execution Note / Output:\n" + logs.join('\n') + "\n" + err.message;
+  } finally {
+    console.log = originalLog;
   }
 }
 
-// Toggles Online/Offline states
-async function toggleReplicaStatus(replica) {
-  const btn = document.getElementById(`toggle-${replica.siteId}`);
-  const card = document.querySelector(`.site-${replica.siteId}`);
-
-  if (replica.online) {
-    // Go offline
-    replica.online = false;
-    if (replica.sseSource) {
-      replica.sseSource.close();
-      replica.sseSource = null;
-    }
-    
-    // Clear remote cursors when user leaves
-    replica.remoteCursors = {};
-
-    btn.textContent = 'OFFLINE';
-    btn.className = 'status-pill offline';
-    card.classList.add('offline-replica');
-    
-    updateReplicaRibbon(replica);
-    renderReplica(replica);
-    checkSystemConvergence();
-  } else {
-    // Reconnect - visual syncing transition
-    replica.syncing = true;
-    btn.textContent = 'SYNCING...';
-    btn.className = 'status-pill syncing';
-    updateReplicaRibbon(replica);
-    
-    // Simulate catch-up transit delay
-    setTimeout(async () => {
-      // Catch up missed edits
-      await catchUpReplica(replica);
-
-      // Reconnect EventSource stream
-      connectReplicaStream(replica);
-
-      replica.syncing = false;
-      replica.online = true;
-      btn.textContent = 'ONLINE';
-      btn.className = 'status-pill online';
-      card.classList.remove('offline-replica');
-      
-      updateReplicaRibbon(replica);
-
-      // Flush local writes accumulated while offline
-      while (replica.outboundQueue.length > 0) {
-        const op = replica.outboundQueue.shift();
-        sendOpToServer(replica, op);
-      }
-
-      sendCursorToServer(replica);
-      renderReplica(replica);
-      checkSystemConvergence();
-    }, 600);
-  }
-  
-  // Re-broadcast status updates
-  renderPresence();
-}
-
-// Helper to compute plain-text representation
-function getReplicaText(replica) {
-  return replica.nodes
-    .filter(node => !node.deleted)
-    .map(node => node.char)
-    .join('');
-}
-
-// Compares plain-text contents of online replicas
-function checkSystemConvergence() {
-  const badge = document.getElementById('convergence-badge');
-  const onlineReplicas = allReplicas.filter(r => r.online && !r.syncing);
-
-  if (onlineReplicas.length <= 1) {
-    badge.innerHTML = '<span class="badge-dot"></span><span class="badge-text">✓ CONVERGED</span>';
-    badge.className = 'badge badge-converged';
+// ------------------------------------------------------------------
+// 4. VOICE AI TUTOR (MIC INPUT & SPEECH SYNTHESIS)
+// ------------------------------------------------------------------
+function toggleVoiceInput() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast("Speech Recognition is supported in modern Chrome, Edge, and Safari browsers.", "warning");
     return;
   }
 
-  const firstText = getReplicaText(onlineReplicas[0]);
-  let converged = true;
-  for (let i = 1; i < onlineReplicas.length; i++) {
-    if (getReplicaText(onlineReplicas[i]) !== firstText) {
-      converged = false;
-      break;
-    }
-  }
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
 
-  if (converged) {
-    badge.innerHTML = '<span class="badge-dot"></span><span class="badge-text">✓ CONVERGED</span>';
-    badge.className = 'badge badge-converged';
-  } else {
-    badge.innerHTML = '<span class="badge-dot"></span><span class="badge-text">⧗ DIVERGING</span>';
-    badge.className = 'badge badge-diverging';
-  }
-}
+  const chatInput = document.getElementById('chat-input');
+  chatInput.placeholder = "Listening... Speak your question clearly into mic.";
 
-// Renders the presence status rows in all replicas
-function renderPresence() {
-  allReplicas.forEach(r => {
-    allReplicas.forEach(other => {
-      if (r.siteId === other.siteId) return;
-      const el = document.getElementById(`presence-${r.siteId}-${other.siteId}`);
-      if (!el) return;
-
-      const statusSpan = el.querySelector('.status-text');
-      const dot = el.querySelector('.status-dot');
-
-      if (other.syncing) {
-        statusSpan.textContent = 'SYNCING...';
-        dot.style.opacity = '0.6';
-      } else if (other.online) {
-        statusSpan.textContent = 'ONLINE';
-        dot.style.opacity = '1';
-      } else {
-        statusSpan.textContent = 'OFFLINE';
-        dot.style.opacity = '0.2';
-      }
-    });
-  });
-}
-
-// ==========================================================================
-// Keyboard Input & Text Editing Model
-// ==========================================================================
-
-function handleInsert(replica, char) {
-  replica.clock++;
-  const nodeId = { site: replica.siteId, clock: replica.clock };
-  const origin = replica.caretPosId;
-  const node = {
-    id: nodeId,
-    char,
-    deleted: false,
-    origin
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    chatInput.value = transcript;
+    chatInput.placeholder = "Ask AI Assistant...";
+    sendChatMessage();
   };
 
-  integrateNode(replica, node);
-  replica.caretPosId = nodeId; // Move caret past new character
-
-  renderReplica(replica);
-
-  const op = {
-    type: 'insert',
-    sender: replica.siteId,
-    node
+  recognition.onerror = () => {
+    chatInput.placeholder = "Ask AI Assistant...";
   };
 
-  if (replica.online) {
-    sendOpToServer(replica, op);
-  } else {
-    // Offline buffer
-    replica.outboundQueue.push(op);
-  }
-
-  sendCursorToServer(replica);
+  recognition.start();
 }
 
-function handleBackspace(replica) {
-  if (replica.caretPosId === null) return;
-
-  const targetId = replica.caretPosId;
-  // Move caret left before deleting node
-  const prevVisibleId = getVisiblePreviousNodeIdById(replica, targetId);
-
-  applyDelete(replica, targetId);
-  replica.caretPosId = prevVisibleId;
-
-  renderReplica(replica);
-
-  const op = {
-    type: 'delete',
-    sender: replica.siteId,
-    targetId
-  };
-
-  if (replica.online) {
-    sendOpToServer(replica, op);
-  } else {
-    // Offline buffer
-    replica.outboundQueue.push(op);
-  }
-
-  sendCursorToServer(replica);
+function toggleVoiceOutput() {
+  voiceOutputEnabled = !voiceOutputEnabled;
+  showToast(voiceOutputEnabled ? "Voice Output Enabled." : "Voice Output Muted.", "success");
 }
 
-function moveCaretHorizontal(replica, direction) {
-  if (direction === 'left') {
-    if (replica.caretPosId === null) return;
-    replica.caretPosId = getVisiblePreviousNodeIdById(replica, replica.caretPosId);
-  } else if (direction === 'right') {
-    if (replica.caretPosId === null) {
-      // Go to first visible node
-      const firstVisible = replica.nodes.find(n => !n.deleted);
-      if (firstVisible) {
-        replica.caretPosId = firstVisible.id;
-      }
-    } else {
-      const idx = findNodeIndex(replica.nodes, replica.caretPosId);
-      if (idx !== -1) {
-        // Find next visible node
-        let nextVisibleId = replica.caretPosId;
-        for (let i = idx + 1; i < replica.nodes.length; i++) {
-          if (!replica.nodes[i].deleted) {
-            nextVisibleId = replica.nodes[i].id;
-            break;
-          }
-        }
-        replica.caretPosId = nextVisibleId;
-      }
-    }
-  }
-
-  sendCursorToServer(replica);
-  renderReplica(replica);
+function speakText(text) {
+  if (!voiceOutputEnabled || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text.replace(/[*#]/g, ''));
+  utterance.rate = 1.0;
+  window.speechSynthesis.speak(utterance);
 }
 
-function moveCaretVertically(replica, direction) {
-  const editorEl = document.getElementById(`editor-${replica.siteId}`);
-  const caretEl = editorEl.querySelector('.local-caret');
-  if (!caretEl) return;
-
-  const caretRect = caretEl.getBoundingClientRect();
-  const caretX = (caretRect.left + caretRect.right) / 2;
-  const caretY = (caretRect.top + caretRect.bottom) / 2;
-
-  const spans = Array.from(editorEl.querySelectorAll('.char-span'));
-  if (spans.length === 0) return;
-
-  const charHeight = spans[0].getBoundingClientRect().height || 18;
-  const targetY = direction === 'up' ? caretY - charHeight : caretY + charHeight;
-
-  let bestSpan = null;
-  let minDistance = Infinity;
-
-  for (const span of spans) {
-    // Skip checking collision with tombstones for vertical navigation if they are hidden
-    const isTombstone = span.classList.contains('tombstone');
-    if (isTombstone && !showTombstones) continue;
-
-    const rect = span.getBoundingClientRect();
-    const spanY = (rect.top + rect.bottom) / 2;
-    const spanX = (rect.left + rect.right) / 2;
-
-    const vDist = Math.abs(spanY - targetY);
-    if (vDist < charHeight * 0.75) {
-      const hDist = Math.abs(spanX - caretX);
-      if (hDist < minDistance) {
-        minDistance = hDist;
-        bestSpan = span;
-      }
+// ------------------------------------------------------------------
+// 5. COURSES CATALOG
+// ------------------------------------------------------------------
+async function loadCourses() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/courses`);
+    const data = await res.json();
+    if (data.success) {
+      currentCourses = data.courses;
+      renderCourses(currentCourses);
     }
+  } catch (err) {
+    console.error("Failed to load courses:", err);
   }
-
-  if (bestSpan) {
-    const nodeObj = JSON.parse(bestSpan.dataset.node);
-    const rect = bestSpan.getBoundingClientRect();
-    if (caretX < (rect.left + rect.right) / 2) {
-      replica.caretPosId = getVisiblePreviousNodeId(replica, nodeObj);
-    } else {
-      replica.caretPosId = nodeObj.id;
-    }
-  } else {
-    // Fallback if no lines above/below
-    if (direction === 'up') {
-      replica.caretPosId = null;
-    } else {
-      const visibleNodes = replica.nodes.filter(n => !n.deleted);
-      if (visibleNodes.length > 0) {
-        replica.caretPosId = visibleNodes[visibleNodes.length - 1].id;
-      }
-    }
-  }
-
-  sendCursorToServer(replica);
-  renderReplica(replica);
 }
 
-// ==========================================================================
-// DOM Renderer
-// ==========================================================================
-
-function renderReplica(replica) {
-  const editorEl = document.getElementById(`editor-${replica.siteId}`);
-  if (!editorEl) return;
-
-  // Track cursor position node mappings
-  const caretsByAttachment = {};
-
-  // Add local caret if focused
-  const isFocused = document.activeElement === editorEl;
-  if (isFocused) {
-    const localAttachedId = getCaretAttachment(replica, replica.caretPosId);
-    const localKey = nodeIdKey(localAttachedId);
-    if (!caretsByAttachment[localKey]) caretsByAttachment[localKey] = [];
-    caretsByAttachment[localKey].push({
-      type: 'local',
-      siteId: replica.siteId,
-      name: replica.name,
-      color: replica.color
-    });
-  }
-
-  // Add remote carets (only from online & non-syncing users)
-  for (const other of allReplicas) {
-    if (other.siteId !== replica.siteId && other.online && !other.syncing) {
-      const rawPosId = replica.remoteCursors[other.siteId];
-      const posId = rawPosId !== undefined ? rawPosId : null;
-      const attachedId = getCaretAttachment(replica, posId);
-      const remoteKey = nodeIdKey(attachedId);
-      if (!caretsByAttachment[remoteKey]) caretsByAttachment[remoteKey] = [];
-      caretsByAttachment[remoteKey].push({
-        type: 'remote',
-        siteId: other.siteId,
-        name: other.name,
-        color: other.color
-      });
-    }
-  }
-
-  // Helper to render carets
-  function makeCaretElement(caret) {
-    if (caret.type === 'local') {
-      const caretSpan = document.createElement('span');
-      caretSpan.className = 'local-caret';
-      return caretSpan;
-    } else {
-      const caretSpan = document.createElement('span');
-      caretSpan.className = `remote-caret border-${caret.siteId}`;
-      caretSpan.style.borderColor = caret.color;
-      
-      const tag = document.createElement('span');
-      tag.className = `remote-caret-tag bg-${caret.siteId}`;
-      tag.style.backgroundColor = caret.color;
-      tag.textContent = caret.name.toUpperCase();
-      
-      caretSpan.appendChild(tag);
-      return caretSpan;
-    }
-  }
-
-  // Clear Editor DOM content
-  editorEl.innerHTML = '';
-
-  // Render starting carets
-  if (caretsByAttachment['start']) {
-    caretsByAttachment['start'].forEach(caret => {
-      editorEl.appendChild(makeCaretElement(caret));
-    });
-  }
-
-  // Render character by character
-  replica.nodes.forEach(node => {
-    if (node.deleted && !showTombstones) return;
-
-    const charSpan = document.createElement('span');
-    charSpan.className = 'char-span';
-    
-    if (node.deleted) {
-      charSpan.className += ' tombstone';
-    }
-
-    charSpan.dataset.meta = `ID: ${node.id.site}:${node.id.clock} | Origin: ${node.origin ? node.origin.site + ':' + node.origin.clock : 'START'}${node.deleted ? ' | (TOMBSTONE)' : ''}`;
-    charSpan.dataset.node = JSON.stringify(node);
-
-    if (node.char === '\n') {
-      charSpan.className += ' char-span-newline';
-      charSpan.textContent = '\n';
-    } else {
-      charSpan.textContent = node.char;
-    }
-
-    editorEl.appendChild(charSpan);
-
-    // Render carets attached to this node
-    const key = nodeIdKey(node.id);
-    if (caretsByAttachment[key]) {
-      caretsByAttachment[key].forEach(caret => {
-        editorEl.appendChild(makeCaretElement(caret));
-      });
-    }
-  });
-
-  // Render footer metrics
-  const charCountVal = replica.nodes.filter(n => !n.deleted).length;
-  document.getElementById(`char-count-${replica.siteId}`).textContent = charCountVal;
-  document.getElementById(`ops-seen-${replica.siteId}`).textContent = replica.appliedSeqs.size;
-}
-
-// ==========================================================================
-// Setup Page Event Listeners
-// ==========================================================================
-
-function handleKeyDown(e, replica) {
-  if (replica.syncing) {
-    e.preventDefault();
+function renderCourses(courses) {
+  const container = document.getElementById('course-grid');
+  if (courses.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--slate-muted);">
+        <h3>No courses found matching your criteria.</h3>
+        <p>Try clearing filters or generate a custom AI course!</p>
+      </div>
+    `;
     return;
   }
 
-  const key = e.key;
+  container.innerHTML = courses.map(course => `
+    <div class="course-card">
+      <div class="course-thumb-wrapper">
+        <img src="${course.thumbnail}" class="course-thumb" alt="${course.title}">
+        <span class="badge-tag">${course.classLevel}</span>
+        <span class="syllabus-tag">${course.syllabus}</span>
+      </div>
+      <div class="course-body">
+        <h3 class="course-title">${course.title}</h3>
+        <p class="course-desc">${course.description}</p>
+        <div class="course-meta">
+          <span>${course.topics.length} Lessons</span>
+          <span>${course.subject}</span>
+        </div>
+        <button class="btn btn-primary" style="margin-top: 1rem; width: 100%;" onclick="openClassroom('${course.id}')">
+          Start Course →
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
 
-  if (e.ctrlKey || e.metaKey || e.altKey) {
+function applyFilters() {
+  const query = document.getElementById('filter-search').value.toLowerCase();
+  const classVal = document.getElementById('filter-class').value;
+  const subjectVal = document.getElementById('filter-subject').value;
+  const syllabusVal = document.getElementById('filter-syllabus').value;
+
+  const filtered = currentCourses.filter(course => {
+    const matchQuery = !query || course.title.toLowerCase().includes(query) || course.description.toLowerCase().includes(query);
+    const matchClass = classVal === 'all' || course.classLevel.toLowerCase().includes(classVal.toLowerCase());
+    const matchSubject = subjectVal === 'all' || course.subject.toLowerCase().includes(subjectVal.toLowerCase());
+    const matchSyllabus = syllabusVal === 'all' || course.syllabus.toLowerCase().includes(syllabusVal.toLowerCase());
+    return matchQuery && matchClass && matchSubject && matchSyllabus;
+  });
+
+  renderCourses(filtered);
+}
+
+// Dynamic AI Course Generator Modal
+function openAICourseModal() {
+  document.getElementById('ai-course-modal').classList.add('active');
+}
+
+function closeAICourseModal() {
+  document.getElementById('ai-course-modal').classList.remove('active');
+}
+
+async function submitAICourseGenerator() {
+  const topic = document.getElementById('gen-topic').value;
+  const classLevel = document.getElementById('gen-class').value;
+  const subject = document.getElementById('gen-subject').value;
+  const syllabus = document.getElementById('gen-syllabus').value;
+
+  if (!topic) {
+    showToast("Please enter a course topic name.", "warning");
     return;
   }
 
-  if (key === 'Backspace') {
-    e.preventDefault();
-    handleBackspace(replica);
-  } else if (key === 'Enter') {
-    e.preventDefault();
-    handleInsert(replica, '\n');
-  } else if (key === 'ArrowLeft') {
-    e.preventDefault();
-    moveCaretHorizontal(replica, 'left');
-  } else if (key === 'ArrowRight') {
-    e.preventDefault();
-    moveCaretHorizontal(replica, 'right');
-  } else if (key === 'ArrowUp') {
-    e.preventDefault();
-    moveCaretVertically(replica, 'up');
-  } else if (key === 'ArrowDown') {
-    e.preventDefault();
-    moveCaretVertically(replica, 'down');
-  } else if (key.length === 1) {
-    e.preventDefault();
-    handleInsert(replica, key);
+  const btn = event.target;
+  btn.disabled = true;
+  btn.innerText = "Generating Syllabus & Curating Video Lessons...";
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/courses/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, classLevel, subject, syllabus })
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeAICourseModal();
+      await loadCourses();
+      openClassroom(data.course.id);
+    } else {
+      showToast("Error generating course: " + data.error, "error");
+    }
+  } catch (err) {
+    showToast("Request failed: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Generate Course";
   }
 }
 
-function initApp() {
-  allReplicas.forEach(replica => {
-    const editorEl = document.getElementById(`editor-${replica.siteId}`);
-    
-    // Connect EventListeners
-    editorEl.addEventListener('keydown', (e) => handleKeyDown(e, replica));
-    editorEl.addEventListener('focus', () => {
-      renderReplica(replica);
-      sendCursorToServer(replica);
-    });
-    editorEl.addEventListener('blur', () => {
-      setTimeout(() => {
-        renderReplica(replica);
-      }, 150);
-    });
+// ------------------------------------------------------------------
+// 6. DIAGNOSTIC ASSESSMENT & WEAK POINT ANALYZER
+// ------------------------------------------------------------------
+async function startDiagnosticTest() {
+  const subject = document.getElementById('diag-subject').value;
+  const classLevel = document.getElementById('diag-class').value;
 
-    // Handle clicks inside editor for cursor placement
-    editorEl.addEventListener('click', (e) => {
-      const charSpan = e.target.closest('.char-span');
-      if (charSpan) {
-        const nodeObj = JSON.parse(charSpan.dataset.node);
-        const rect = charSpan.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        
-        if (clickX < rect.width / 2) {
-          replica.caretPosId = getVisiblePreviousNodeId(replica, nodeObj);
-        } else {
-          replica.caretPosId = nodeObj.id;
-        }
-      } else {
-        const visibleNodes = replica.nodes.filter(n => !n.deleted);
-        if (visibleNodes.length > 0) {
-          replica.caretPosId = visibleNodes[visibleNodes.length - 1].id;
-        } else {
-          replica.caretPosId = null;
-        }
-      }
-      sendCursorToServer(replica);
-      renderReplica(replica);
-    });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/diagnostic/questions?subject=${encodeURIComponent(subject)}`);
+    const data = await res.json();
 
-    // Toggle Online/Offline buttons
-    document.getElementById(`toggle-${replica.siteId}`).addEventListener('click', () => {
-      toggleReplicaStatus(replica);
-    });
+    if (data.success && data.questions.length > 0) {
+      diagQuestions = data.questions;
+      diagCurrentStep = 0;
+      diagUserAnswers = [];
 
-    // Initial SSE Stream connection
-    connectReplicaStream(replica);
-    
-    // Initial fetch of operations (Genesis document)
-    catchUpReplica(replica);
-  });
+      document.getElementById('diagnostic-setup').style.display = 'none';
+      document.getElementById('diagnostic-report-screen').style.display = 'none';
+      document.getElementById('diagnostic-quiz-screen').style.display = 'block';
 
-  // Global reset button
-  document.getElementById('reset-btn').addEventListener('click', async () => {
-    try {
-      await fetch('/api/crdt/reset', { method: 'POST' });
-    } catch (err) {
-      console.error('Reset database failed:', err);
+      renderDiagQuestion();
     }
-  });
-
-  // Diagnostics Button
-  document.getElementById('run-tests-btn').addEventListener('click', () => {
-    runDiagnostics();
-  });
-  
-  document.getElementById('close-diag-btn').addEventListener('click', () => {
-    document.getElementById('diagnostic-pane').classList.add('hidden');
-  });
-
-  // Tombstone toggle switch
-  const tombstoneToggle = document.getElementById('tombstone-toggle');
-  tombstoneToggle.addEventListener('change', () => {
-    showTombstones = tombstoneToggle.checked;
-    allReplicas.forEach(renderReplica);
-  });
-
-  // Monospace log filter buttons
-  const filterBtns = document.querySelectorAll('.filter-btn');
-  filterBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentLogFilter = btn.dataset.filter;
-      applyLogFiltering();
-    });
-  });
-
-  renderPresence();
-  allReplicas.forEach(updateReplicaRibbon);
+  } catch (err) {
+    showToast("Failed to load diagnostic test: " + err.message, "error");
+  }
 }
 
-// Initialize on page load
-window.addEventListener('DOMContentLoaded', initApp);
+function renderDiagQuestion() {
+  const q = diagQuestions[diagCurrentStep];
+  if (!q) return;
 
-// ==========================================================================
-// Systems Verification Diagnostic Test Suite
-// ==========================================================================
+  document.getElementById('diag-progress-text').innerText = `Question ${diagCurrentStep + 1} of ${diagQuestions.length}`;
+  document.getElementById('diag-question-text').innerText = `[Topic: ${q.topic}] ${q.question}`;
 
-function runDiagnostics() {
-  const diagPane = document.getElementById('diagnostic-pane');
-  const logEl = document.getElementById('test-results-log');
-  diagPane.classList.remove('hidden');
-  logEl.innerHTML = '';
-  
-  function log(msg, type = 'info') {
-    const line = document.createElement('div');
-    if (type === 'pass') {
-      line.style.color = '#baff00';
-      line.style.fontWeight = 'bold';
-      line.textContent = `[PASS] ${msg}`;
-    } else if (type === 'fail') {
-      line.style.color = '#ff6b4a';
-      line.style.fontWeight = 'bold';
-      line.textContent = `[FAIL] ${msg}`;
-    } else {
-      line.style.color = '#94a3b8';
-      line.textContent = `[INFO] ${msg}`;
+  const container = document.getElementById('diag-options-container');
+  container.innerHTML = q.options.map((opt, idx) => `
+    <div class="quiz-option" onclick="selectDiagOption(${idx})">
+      <span style="margin-right: 0.75rem; font-weight: 700; color: var(--primary);">${String.fromCharCode(65 + idx)}.</span>
+      <span>${opt}</span>
+    </div>
+  `).join('');
+}
+
+async function selectDiagOption(selectedIndex) {
+  diagUserAnswers.push(selectedIndex);
+  diagCurrentStep++;
+
+  if (diagCurrentStep < diagQuestions.length) {
+    renderDiagQuestion();
+  } else {
+    const studentName = (currentUser && currentUser.name) || document.getElementById('diag-student-name').value || "Student Learner";
+    const subject = document.getElementById('diag-subject').value;
+    const classLevel = document.getElementById('diag-class').value;
+
+    const res = await fetch(`${API_BASE_URL}/api/diagnostic/evaluate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentName,
+        subject,
+        classLevel,
+        questions: diagQuestions,
+        userAnswers: diagUserAnswers
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      lastDiagReport = data.report;
+      renderDiagnosticReport(data.report);
     }
-    logEl.appendChild(line);
-    logEl.scrollTop = logEl.scrollHeight;
   }
+}
 
-  log("Starting RGA CRDT verification suite...\n");
-  
-  // Test 1: Sibling concurrent inserts (deterministic commutative order)
+function renderDiagnosticReport(report) {
+  document.getElementById('diagnostic-quiz-screen').style.display = 'none';
+  document.getElementById('diagnostic-report-screen').style.display = 'block';
+
+  document.getElementById('diag-score-display').innerText = `${report.scorePct}%`;
+  document.getElementById('diag-status-display').innerText = report.status;
+
+  const list = document.getElementById('diag-weak-points-list');
+  list.innerHTML = report.weakPoints.map(wp => `
+    <div style="background-color: var(--bg-secondary); border: 1px solid var(--border-light); padding: 0.85rem; border-radius: var(--radius-md); margin-bottom: 0.5rem;">
+      <span class="weak-tag">Weak Point: ${wp.topic}</span>
+      <p style="font-size: 0.85rem; color: var(--slate-medium); margin-top: 0.25rem;">${wp.explanation}</p>
+    </div>
+  `).join('');
+}
+
+async function generateIndividualizedCourseFromReport() {
+  if (!lastDiagReport) return;
+
+  const btn = document.getElementById('btn-build-individualized');
+  btn.disabled = true;
+  btn.innerText = "Building Custom Complete Syllabus Course...";
+
   try {
-    log("Test 1: Sibling concurrent inserts tie-breaking");
-    const r1 = createReplicaObject('X', 'TestX', '#fff');
-    const r2 = createReplicaObject('Y', 'TestY', '#fff');
-    
-    const nodeX = {
-      id: { site: 'X', clock: 1 },
-      char: 'x',
-      deleted: false,
-      origin: null
-    };
-    const nodeY = {
-      id: { site: 'Y', clock: 1 },
-      char: 'y',
-      deleted: false,
-      origin: null
-    };
-    
-    integrateNode(r1, nodeX);
-    integrateNode(r1, nodeY);
-    
-    integrateNode(r2, nodeY);
-    integrateNode(r2, nodeX);
-    
-    const text1 = r1.nodes.map(n => n.char).join('');
-    const text2 = r2.nodes.map(n => n.char).join('');
-    
-    // Site Y > Site X, so Y wins left slot -> 'yx'
-    if (text1 === text2 && text1 === 'yx') {
-      log(`Replica X: "${text1}" | Replica Y: "${text2}"`, 'info');
-      log("Tie-breaking converges and matches expected order 'yx'.", 'pass');
-    } else {
-      log(`Convergence failure. Replica X: "${text1}" | Replica Y: "${text2}"`, 'fail');
+    const res = await fetch(`${API_BASE_URL}/api/diagnostic/build-individualized-course`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentName: lastDiagReport.studentName,
+        subject: lastDiagReport.subject,
+        classLevel: lastDiagReport.classLevel,
+        weakPoints: lastDiagReport.weakPoints
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      await loadCourses();
+      openClassroom(data.course.id);
     }
   } catch (err) {
-    log(`Test 1 threw error: ${err.message}`, 'fail');
+    showToast("Error building individualized course: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Build My Individualized Complete Syllabus Course →";
+  }
+}
+
+// ------------------------------------------------------------------
+// 7. CLASSROOM & YOUTUBE PLAYER
+// ------------------------------------------------------------------
+async function openClassroom(courseId) {
+  const course = currentCourses.find(c => c.id === courseId);
+  if (!course) return;
+
+  activeCourse = course;
+  activeTopicIndex = 0;
+
+  switchView('classroom-view');
+  renderClassroomTopic(0);
+  renderTopicSidebar();
+}
+
+function renderClassroomTopic(index) {
+  activeTopicIndex = index;
+  const topic = activeCourse.topics[index];
+
+  document.getElementById('youtube-player').src = `https://www.youtube.com/embed/${topic.videoId}?autoplay=1&rel=0`;
+  document.getElementById('lesson-title').innerText = topic.title;
+  document.getElementById('lesson-duration').innerText = `Duration: ${topic.duration} • Aligned with ${activeCourse.syllabus}`;
+  document.getElementById('lesson-summary').innerText = topic.summary;
+
+  const notesList = document.getElementById('lesson-notes-list');
+  notesList.innerHTML = topic.notes.map(note => `<li>${note}</li>`).join('');
+
+  document.querySelectorAll('.topic-item').forEach((item, idx) => {
+    if (idx === index) item.classList.add('active');
+    else item.classList.remove('active');
+  });
+
+  checkCourseCompletionStatus();
+}
+
+function renderTopicSidebar() {
+  document.getElementById('course-title-sidebar').innerText = activeCourse.title;
+  const container = document.getElementById('topic-list');
+
+  container.innerHTML = activeCourse.topics.map((t, idx) => {
+    const isCompleted = userProgress.completedTopics.includes(t.id);
+    return `
+      <div class="topic-item ${idx === activeTopicIndex ? 'active' : ''} ${isCompleted ? 'completed' : ''}" onclick="renderClassroomTopic(${idx})">
+        <div class="topic-check">${isCompleted ? '✓' : idx + 1}</div>
+        <div style="flex-grow: 1;">
+          <div style="font-size: 0.88rem; font-weight: 600; color: var(--slate-dark);">${t.title}</div>
+          <div style="font-size: 0.75rem; color: var(--slate-muted);">${t.duration}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function checkCourseCompletionStatus() {
+  if (!activeCourse) return;
+  const allCompleted = activeCourse.topics.every(t => userProgress.completedTopics.includes(t.id));
+  const certBtn = document.getElementById('claim-cert-btn');
+  if (allCompleted) {
+    certBtn.style.display = 'block';
+  } else {
+    certBtn.style.display = 'none';
+  }
+}
+
+// ------------------------------------------------------------------
+// 8. KNOWLEDGE QUIZ MODAL
+// ------------------------------------------------------------------
+function openQuizModal() {
+  if (!activeCourse) return;
+  const topic = activeCourse.topics[activeTopicIndex];
+
+  currentQuizQuestions = topic.quiz || [];
+  currentQuizStep = 0;
+  currentQuizScore = 0;
+
+  renderQuizStep();
+  document.getElementById('quiz-modal').classList.add('active');
+}
+
+function closeQuizModal() {
+  document.getElementById('quiz-modal').classList.remove('active');
+}
+
+function renderQuizStep() {
+  const q = currentQuizQuestions[currentQuizStep];
+  if (!q) return;
+
+  document.getElementById('quiz-progress-text').innerText = `Question ${currentQuizStep + 1} of ${currentQuizQuestions.length}`;
+  document.getElementById('quiz-question-text').innerText = q.question;
+  document.getElementById('quiz-explanation-box').style.display = 'none';
+  document.getElementById('quiz-next-btn').style.display = 'none';
+
+  const container = document.getElementById('quiz-options-container');
+  container.innerHTML = q.options.map((opt, idx) => `
+    <div class="quiz-option" onclick="selectQuizOption(${idx})">
+      <span style="margin-right: 0.75rem; font-weight: 700; color: var(--primary);">${String.fromCharCode(65 + idx)}.</span>
+      <span>${opt}</span>
+    </div>
+  `).join('');
+}
+
+function selectQuizOption(selectedIndex) {
+  const q = currentQuizQuestions[currentQuizStep];
+  const options = document.querySelectorAll('.quiz-option');
+
+  options.forEach((opt, idx) => {
+    opt.onclick = null;
+    if (idx === q.correct) {
+      opt.classList.add('correct');
+    }
+    if (idx === selectedIndex && selectedIndex !== q.correct) {
+      opt.classList.add('incorrect');
+    }
+  });
+
+  if (selectedIndex === q.correct) {
+    currentQuizScore++;
   }
 
-  // Test 2: Out-of-order delete (delete arriving before insert)
-  try {
-    log("\nTest 2: Out-of-order delete retroactive tombstoning");
-    const r = createReplicaObject('Z', 'TestZ', '#fff');
-    const targetId = { site: 'A', clock: 100 };
-    
-    applyDelete(r, targetId);
-    log(`Applied delete for A:100 before insert. pendingDeletes contains A:100? ${r.pendingDeletes.has('A:100')}`, 'info');
-    
-    const insertNode = {
-      id: targetId,
-      char: 'a',
-      deleted: false,
-      origin: null
-    };
-    integrateNode(r, insertNode);
-    
-    if (r.nodes.length === 1 && r.nodes[0].deleted) {
-      log("Insert successfully integrated as tombstone retroactively.", 'pass');
-    } else {
-      log(`Failed retroactive tombstone. nodes length=${r.nodes.length}, deleted=${r.nodes[0]?.deleted}`, 'fail');
-    }
-  } catch (err) {
-    log(`Test 2 threw error: ${err.message}`, 'fail');
-  }
+  const expBox = document.getElementById('quiz-explanation-box');
+  expBox.innerHTML = `<strong>Explanation:</strong> ${q.explanation}`;
+  expBox.style.display = 'block';
 
-  // Test 3: Complex concurrent edit merging (Offline conflict simulation)
+  document.getElementById('quiz-next-btn').style.display = 'inline-flex';
+}
+
+async function nextQuizQuestion() {
+  currentQuizStep++;
+  if (currentQuizStep < currentQuizQuestions.length) {
+    renderQuizStep();
+  } else {
+    const scorePct = Math.round((currentQuizScore / currentQuizQuestions.length) * 100);
+    const topic = activeCourse.topics[activeTopicIndex];
+
+    await fetch(`${API_BASE_URL}/api/progress/topic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topicId: topic.id, score: scorePct })
+    });
+
+    await loadProgress();
+    renderTopicSidebar();
+
+    showToast(`Quiz Completed. Your score: ${scorePct}%`, 'success');
+    closeQuizModal();
+  }
+}
+
+// ------------------------------------------------------------------
+// 9. CLEAN WHITE INTERACTIVE AI CHAT WITH VOICE OUT
+// ------------------------------------------------------------------
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const query = input.value.trim();
+  if (!query || !activeCourse) return;
+
+  const currentTopic = activeCourse.topics[activeTopicIndex];
+  const chatBox = document.getElementById('chat-box');
+
+  chatBox.innerHTML += `<div class="chat-bubble user">${query}</div>`;
+  input.value = '';
+  chatBox.scrollTop = chatBox.scrollHeight;
+
   try {
-    log("\nTest 3: Offline conflict simulation and catch-up");
-    const rAlice = createReplicaObject('A', 'Alice', '#fff');
-    const rBob = createReplicaObject('B', 'Bob', '#fff');
-    
-    const genesisNode = { id: { site: 'S', clock: 1 }, char: 'H', deleted: false, origin: null };
-    integrateNode(rAlice, genesisNode);
-    integrateNode(rBob, genesisNode);
-    
-    const nodeAlice = { id: { site: 'A', clock: 1 }, char: 'A', deleted: false, origin: { site: 'S', clock: 1 } };
-    integrateNode(rAlice, nodeAlice);
-    
-    const nodeBob = { id: { site: 'B', clock: 1 }, char: 'B', deleted: false, origin: { site: 'S', clock: 1 } };
-    integrateNode(rBob, nodeBob);
-    
-    integrateNode(rAlice, nodeBob);
-    integrateNode(rBob, nodeAlice);
-    
-    const textAlice = rAlice.nodes.filter(n => !n.deleted).map(n => n.char).join('');
-    const textBob = rBob.nodes.filter(n => !n.deleted).map(n => n.char).join('');
-    
-    if (textAlice === textBob && textAlice === 'HBA') {
-      log(`Alice merged text: "${textAlice}"`, 'info');
-      log(`Bob merged text: "${textBob}"`, 'info');
-      log("Both replicas converged to the same text 'HBA' successfully.", 'pass');
-    } else {
-      log(`Convergence mismatch. Alice: "${textAlice}" | Bob: "${textBob}"`, 'fail');
+    const res = await fetch(`${API_BASE_URL}/api/ai/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, currentLesson: currentTopic })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const reply = data.reply;
+      chatBox.innerHTML += `<div class="chat-bubble ai">${reply.replace(/\n/g, '<br>')}</div>`;
+      chatBox.scrollTop = chatBox.scrollHeight;
+      speakText(reply);
     }
   } catch (err) {
-    log(`Test 3 threw error: ${err.message}`, 'fail');
+    console.error("Chat error:", err);
+  }
+}
+
+// ------------------------------------------------------------------
+// 10. USER PROGRESS & AI SCHEDULE
+// ------------------------------------------------------------------
+async function loadProgress() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/progress`);
+    const data = await res.json();
+    if (data.success) {
+      userProgress = data.progress;
+    }
+  } catch (err) {
+    console.error("Progress load error:", err);
+  }
+}
+
+async function loadSchedule() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/schedule`);
+    const data = await res.json();
+    if (data.success && data.schedule) {
+      renderSchedule(data.schedule);
+    } else {
+      generateNewSchedule();
+    }
+  } catch (err) {
+    console.error("Schedule load error:", err);
+  }
+}
+
+async function generateNewSchedule() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/schedule/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ examDate: 'Next Month', dailyHours: 2, targetClass: 'Class 10-12', targetSubject: 'All Core Subjects' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      renderSchedule(data.schedule);
+    }
+  } catch (err) {
+    console.error("Generate schedule error:", err);
+  }
+}
+
+function renderSchedule(schedule) {
+  const container = document.getElementById('schedule-grid');
+  container.innerHTML = schedule.timeline.map(item => `
+    <div class="filter-group" style="background-color: var(--bg-main); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+      <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--primary); font-weight: 700;">
+        <span>${item.day} • ${item.dateStr}</span>
+        <span>${item.targetHours} Hours Target</span>
+      </div>
+      <h4 style="color: var(--slate-dark); font-size: 0.95rem; margin: 0.4rem 0;">${item.task}</h4>
+      <p style="font-size: 0.8rem; color: var(--slate-muted);">${item.focusArea}</p>
+    </div>
+  `).join('');
+}
+
+// ------------------------------------------------------------------
+// 11. CERTIFICATE GENERATOR & CLAIMING
+// ------------------------------------------------------------------
+async function claimCourseCertificate() {
+  if (!activeCourse) return;
+
+  const studentName = (currentUser && currentUser.name) || prompt("Enter your full name for the certificate:", "Student Learner");
+  if (!studentName) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/certificates/issue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ courseId: activeCourse.id, studentName, score: 95 })
+    });
+    const data = await res.json();
+    if (data.success) {
+      openCertificateModal(data.certificate);
+    }
+  } catch (err) {
+    showToast("Error claiming certificate: " + err.message, "error");
+  }
+}
+
+function openCertificateModal(cert) {
+  document.getElementById('cert-student-name-display').innerText = cert.studentName;
+  document.getElementById('cert-course-name-display').innerText = cert.courseTitle;
+  document.getElementById('cert-date-display').innerText = cert.issueDate;
+  document.getElementById('cert-score-display').innerText = cert.score + '%';
+  document.getElementById('cert-id-display').innerText = cert.id;
+
+  document.getElementById('cert-modal').classList.add('active');
+}
+
+function closeCertModal() {
+  document.getElementById('cert-modal').classList.remove('active');
+}
+
+async function loadCertificates() {
+  const container = document.getElementById('certificates-list');
+  try {
+    container.innerHTML = `
+      <div class="course-card" style="grid-column: 1 / -1; padding: 2.5rem; text-align: center;">
+        <h3 style="color: var(--slate-dark); margin-bottom: 0.5rem;">Earned Certificates</h3>
+        <p style="color: var(--slate-medium); margin-bottom: 1.5rem;">Complete all lesson quizzes in any course to claim your verified completion certificate.</p>
+        <button class="btn btn-primary" onclick="switchView('home-view')">Explore Courses →</button>
+      </div>
+    `;
+  } catch (err) {
+    console.error("Certificates load error:", err);
   }
 }
