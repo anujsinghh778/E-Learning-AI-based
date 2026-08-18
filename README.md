@@ -1,5 +1,7 @@
 # AI-Driven Learning Support System
 
+Live Demo: https://e-learning-ai-based.onrender.com/
+
 An AI-powered learning management platform that simplifies and customizes the learning experience using Google Gemini models. The system features smart course generation, student diagnostic assessments, automated remedial lesson plans, an interactive coding sandbox, spaced repetition 3D flashcards, and verified completion certificates.
 
 ## Key Features

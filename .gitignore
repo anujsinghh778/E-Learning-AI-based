@@ -16,3 +16,8 @@ yarn-error.log*
 # Operating System files
 .DS_Store
 Thumbs.db
+
+# Secrets and Databases
+.env
+.env.local
+data_store.json
