@@ -53,8 +53,7 @@ An AI-powered learning management platform that simplifies and customizes the le
 3. **Configure Environment Variables**:
    Create a `.env` file at the root of the project:
    ```env
-   PORT=3000
-   GEMINI_API_KEY=your_google_gemini_api_key
+
    ```
    *(Note: If no API key is provided, the system runs in Mock Mode fallback for testing).*
 
@@ -64,13 +63,7 @@ An AI-powered learning management platform that simplifies and customizes the le
    ```
 
 5. **Access the App**:
-   Open your browser and navigate to `http://localhost:3000`
+
 
 ---
 
-## Deployment (Vercel)
-
-The project is configured for serverless deployment on Vercel:
-1. Connect your repository to Vercel.
-2. Add your `GEMINI_API_KEY` to Vercel's Environment Variables.
-3. Deploy!
