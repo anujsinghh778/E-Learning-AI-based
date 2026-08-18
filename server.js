@@ -209,8 +209,8 @@ app.get('*', (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`=======================================================`);
-    console.log(`🎓 AI-Driven Learning Support System Server Running!`);
-    console.log(`🔗 URL: http://localhost:${PORT}`);
+    console.log(` AI-Driven Learning Support System Server Running!`);
+    console.log(` URL: http://localhost:${PORT}`);
     console.log(`=======================================================`);
   });
 }

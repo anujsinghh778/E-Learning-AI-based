@@ -9,9 +9,9 @@ function showToast(message, type = 'info') {
   toast.className = `toast ${type}`;
   
   let icon = 'ℹ️';
-  if (type === 'success') icon = '✅';
-  if (type === 'error') icon = '❌';
-  if (type === 'warning') icon = '⚠️';
+  if (type === 'success') icon = '';
+  if (type === 'error') icon = '';
+  if (type === 'warning') icon = '️';
   
   toast.innerHTML = `<span style="font-size: 1.1rem; display: flex; align-items: center;">${icon}</span> <span>${message}</span>`;
   container.appendChild(toast);
@@ -290,7 +290,7 @@ function renderCourses(courses) {
           <span>${course.subject}</span>
         </div>
         <button class="btn btn-primary" style="margin-top: 1rem; width: 100%;" onclick="openClassroom('${course.id}')">
-          Start Course →
+          Start Course 
         </button>
       </div>
     </div>
@@ -478,7 +478,7 @@ async function generateIndividualizedCourseFromReport() {
     showToast("Error building individualized course: " + err.message, "error");
   } finally {
     btn.disabled = false;
-    btn.innerText = "Build My Individualized Complete Syllabus Course →";
+    btn.innerText = "Build My Individualized Complete Syllabus Course ";
   }
 }
 
@@ -525,7 +525,7 @@ function renderTopicSidebar() {
     const isCompleted = userProgress.completedTopics.includes(t.id);
     return `
       <div class="topic-item ${idx === activeTopicIndex ? 'active' : ''} ${isCompleted ? 'completed' : ''}" onclick="renderClassroomTopic(${idx})">
-        <div class="topic-check">${isCompleted ? '✓' : idx + 1}</div>
+        <div class="topic-check">${isCompleted ? 'Completed' : idx + 1}</div>
         <div style="flex-grow: 1;">
           <div style="font-size: 0.88rem; font-weight: 600; color: var(--slate-dark);">${t.title}</div>
           <div style="font-size: 0.75rem; color: var(--slate-muted);">${t.duration}</div>
@@ -767,7 +767,7 @@ async function loadCertificates() {
       <div class="course-card" style="grid-column: 1 / -1; padding: 2.5rem; text-align: center;">
         <h3 style="color: var(--slate-dark); margin-bottom: 0.5rem;">Earned Certificates</h3>
         <p style="color: var(--slate-medium); margin-bottom: 1.5rem;">Complete all lesson quizzes in any course to claim your verified completion certificate.</p>
-        <button class="btn btn-primary" onclick="switchView('home-view')">Explore Courses →</button>
+        <button class="btn btn-primary" onclick="switchView('home-view')">Explore Courses </button>
       </div>
     `;
   } catch (err) {
