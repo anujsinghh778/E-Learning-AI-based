@@ -1,62 +1,74 @@
-# Nirmal Masala Bhandar - Heritage Spice & Tea Shop (Jodhpur)
-https://nirmal-masala-bhandar-webapp.onrender.com
+# AI-Driven Learning Support System
 
-A premium, full-stack, single-page e-commerce storefront for a heritage spice shop based in the old city bazaar of Jodhpur, Rajasthan. 
+An AI-powered learning management platform that simplifies and customizes the learning experience using Google Gemini models. The system features smart course generation, student diagnostic assessments, automated remedial lesson plans, an interactive coding sandbox, spaced repetition 3D flashcards, and verified completion certificates.
 
-This project bridges traditional local spice-trading craft with modern, quick-commerce capabilities, featuring dynamic category loading, persistent shopping cart, checkout processing, local review submission, and database storage.
+## Key Features
 
- Features
+1. **AI Content Curation & Course Generator**:
+   - Inputs any learning topic (e.g., "Machine Learning", "Ohm's Law") and automatically compiles structured course modules with video resources, notes, and interactive quizzes.
 
-1. **Rich Heritage Aesthetics**:
-   - Designed around Jodhpur bazaar visual themes, featuring a warm ink-brown palette (`#140d09`), glowing gold (`#dfad3c`) and copper (`#b86927`) accent tones, and parchment text readability.
-   - Inline SVG of a custom heritage brass scale in the hero.
-   - Clean custom typography with **Fraunces** for display headers, **Work Sans** for UI copy, and **IBM Plex Mono** for bazaar-style receipt pricing tags.
+2. **Diagnostic Assessment & Evaluation**:
+   - Takes subject-based assessments to analyze the student's current proficiency level.
+   - Evaluates quiz responses and highlights conceptual weak points.
 
-2. **Full-Stack Database Architecture**:
-   - SQLite integration using Node.js's native `node:sqlite` module (available in Node.js 22.x+). No native compiler requirements during installation!
-   - Relational schema including: `categories`, `products`, `reviews`, `contact_messages`, `orders`, and `order_items`.
-   - Auto-creation and seeding of categories, signature spices, and mock reviews on first run.
+3. **Individualized Course Builder**:
+   - Generates custom remedial courses that specifically target the student's weaknesses identified in the diagnostic assessment.
 
-3. **Secure Checkout & Order Lifecycle**:
-   - Server-side validation of cart items and prices directly against database records to prevent client-side price tampering.
-   - Synchronous transactional insertion of order and item details.
-   - Immediate order number dispatch (e.g. `NMB-2026-XXXX`).
+4. **Interactive JavaScript Sandbox**:
+   - Write, edit, and execute JavaScript code directly in the integrated coding environment.
 
-4. **Dynamic Frontend Client (`public/`)**:
-   - Responsive layouts suitable for screens of all sizes (desktop down to mobile).
-   - Category filtering chips to instantly request relevant items from the API.
-   - Interactive slide-out Cart Drawer with quantity adjustment, items sum, and checkout transitions.
-   - Interactive star rating picker for submitting customer reviews with instant list re-rendering.
-   - Fully functional contact message submissions saved in the database.
+5. **AI Study Buddy Drawer**:
+   - Context-aware chatbot trained to act as a private tutor.
+   - Supports speech recognition (mic voice input) and text-to-speech (read-aloud answers).
+
+6. **3D Spaced Repetition Flashcards**:
+   - Revision flashcards with 3D perspective flip transitions for testing memory recall.
+
+7. **Verified Completion Certificates**:
+   - Generates printable certificates with custom dynamic digital seals, scores, and completion IDs.
 
 ---
 
-## Folder Structure
+## Tech Stack
 
-```
-├── public/                 # Static frontend assets
-│   ├── index.html          # Semantic HTML5 layout
-│   ├── styles.css          # Design system stylesheet
-│   └── app.js              # State manager & AJAX consumer
-├── db.js                   # node:sqlite database configuration & seeds
-├── server.js               # Express application REST routes
-├── package.json            # Project dependencies & startup scripts
-└── README.md               # User documentation (this file)
-```
+- **Frontend**: HTML5, CSS3 (Modern Clean Theme), JavaScript (ES6)
+- **Backend**: Node.js, Express.js
+- **AI Engine**: Google GenAI SDK (`gemini-2.5-flash`)
+- **Database**: Local JSON file storage (`data_store.json`) for zero-dependency portability.
 
 ---
 
+## Installation & Setup
 
+1. **Clone or Download the Project**:
+   Ensure you are in the project folder.
 
-## REST API Reference
+2. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
 
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| `/api/categories` | `GET` | Retrieve all spice categories |
-| `/api/products` | `GET` | Retrieve all products (supports query `?category_id=X`) |
-| `/api/products/:id` | `GET` | Retrieve details for a single product |
-| `/api/reviews` | `GET` | Get all submitted reviews (newest first) |
-| `/api/reviews` | `POST` | Post a new customer review (JSON body: `{ name, rating, comment }`) |
-| `/api/contact` | `POST` | Send a contact/wholesale message (JSON body: `{ name, email, phone, message }`) |
-| `/api/orders` | `POST` | Create a new order (JSON body: `{ customer_name, customer_email, customer_phone, customer_address, items: [{ product_id, quantity }] }`) |
-| `/api/orders/:id` | `GET` | Get details for an order and its items |
+3. **Configure Environment Variables**:
+   Create a `.env` file at the root of the project:
+   ```env
+   PORT=3000
+   GEMINI_API_KEY=your_google_gemini_api_key
+   ```
+   *(Note: If no API key is provided, the system runs in Mock Mode fallback for testing).*
+
+4. **Start the Application**:
+   ```bash
+   npm start
+   ```
+
+5. **Access the App**:
+   Open your browser and navigate to `http://localhost:3000`
+
+---
+
+## Deployment (Vercel)
+
+The project is configured for serverless deployment on Vercel:
+1. Connect your repository to Vercel.
+2. Add your `GEMINI_API_KEY` to Vercel's Environment Variables.
+3. Deploy!
